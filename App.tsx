@@ -1,45 +1,49 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+// import React from "react";
+// import { NavigationContainer } from "@react-navigation/native";
+// import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+// import SignIn from "./src/screens/signin";
+// import GetStarted from "./src/screens/getstarted";
+// import HomePage from "./src/screens/homepage";
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+// const Stack = createNativeStackNavigator();
 
+// export default function App() {
+//   return (
+//     <NavigationContainer>
+//       <Stack.Navigator
+//         initialRouteName="SignIn"
+//         screenOptions={{ headerShown: false }}
+//       >
+//         <Stack.Screen name="SignIn" component={SignIn} />
+//         <Stack.Screen name="GetStarted" component={GetStarted} />
+//         <Stack.Screen name="HomePage" component={HomePage} />
+//       </Stack.Navigator>
+//     </NavigationContainer>
+//   );
+// }
+
+
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
+import SignIn from "./src/screens/signin";
+import GetStarted from "./src/screens/getstarted";
+import TabNavigator from "./src/navigation/TabNavigator";
+
+const Stack = createNativeStackNavigator();
+
+export default function App() {
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="SignIn" component={SignIn} />
+        <Stack.Screen name="GetStarted" component={GetStarted} />
+
+        {/* 👇 THIS is where tabs live */}
+        <Stack.Screen name="MainTabs" component={TabNavigator} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
-
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
-
-export default App;

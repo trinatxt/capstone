@@ -31,6 +31,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import SignIn from "./src/screens/signin";
 import GetStarted from "./src/screens/getstarted";
 import TabNavigator from "./src/navigation/TabNavigator";
+import Wifi from "./src/screens/wifi";
+import Settings from "./src/screens/settings";
 
 const Stack = createNativeStackNavigator();
 
@@ -43,6 +45,12 @@ export default function App() {
 
         {/* 👇 THIS is where tabs live */}
         <Stack.Screen name="MainTabs" component={TabNavigator} />
+        <Stack.Screen name="Wifi" component={Wifi} />
+        <Stack.Screen
+          name="Settings"
+          component={Settings}
+          options={{ animation: "slide_from_left" }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

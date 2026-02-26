@@ -7,7 +7,7 @@ export default function SignIn({ navigation }: any) {
     <View style={styles.container}>
       {/* Logo */}
       <Image
-        source={require("../images/modulux.png")}
+        source={require("../images/logo.png")}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -31,11 +31,11 @@ export default function SignIn({ navigation }: any) {
       <Pressable
         onPress={() => navigation.navigate("signdelta")}
         style={({ pressed }) => [
-          styles.button,
-          { backgroundColor: pressed ? "#60a7f9" : "#056af7", marginTop: 20},
+          styles.buttonSecondary,
+          { backgroundColor: pressed ? "#E0E0E0" : "#EFEFEF", marginTop: 12 },
         ]}
       >
-        <Text style={styles.buttonText}>Sign in with Delta</Text>
+        <Text style={styles.buttonSecondaryText}>Sign in with Delta</Text>
       </Pressable>
     </View>
   );
@@ -61,14 +61,27 @@ const styles = StyleSheet.create({
     color: "#333",
   },
   button: {
-    width: 200,            // fixed width
-    height: 50,            // fixed height
+    width: "100%",
+    height: 50,
     borderRadius: 25,
     justifyContent: "center",
     alignItems: "center",
   },
   buttonText: {
     color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  buttonSecondary: {
+    width: "100%",
+    height: 50,
+    borderRadius: 25,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  buttonSecondaryText: {
+    color: "#1a1a1a",
     fontSize: 18,
     fontWeight: "bold",
     textAlign: "center",

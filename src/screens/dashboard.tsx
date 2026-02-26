@@ -6,12 +6,13 @@ import {
   Dimensions,
   ScrollView,
   Image,
+  Pressable,
 } from "react-native";
 import { LineChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width;
 
-export default function Dashboard() {
+export default function Dashboard({ navigation }: any) {
   const data = {
     labels: ["9AM", "11AM", "1PM", "3PM", "5PM"],
     datasets: [
@@ -28,10 +29,12 @@ export default function Dashboard() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Image
-              source={require("../images/avatar.png")}
-              style={styles.avatar}
-            />
+            <Pressable onPress={() => navigation.navigate("Settings")}>
+              <Image
+                source={require("../images/avatar.png")}
+                style={styles.avatar}
+              />
+            </Pressable>
             <Text style={styles.title}>Dashboard</Text>
           </View>
         </View>

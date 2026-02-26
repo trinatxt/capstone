@@ -8,6 +8,7 @@ import {
   ScrollView,
   Image,
 } from "react-native";
+import Slider from "@react-native-community/slider";
 
 // ---- ESP32 IP ----
 const ESP32_IP = "http://172.20.10.2";
@@ -37,191 +38,267 @@ const sendControlUpdate = async (lightOn, brightness, fanSpeed) => {
   }
 };
 
-export default function Controls() {
+const modeConfig = [
+  { label: "Meeting",    sub: "For collaboration\nand calls",  color: "#1E3EA1" },
+  { label: "Reading",    sub: "Quiet focus time",              color: "#B0BEF8" },
+  { label: "Relaxation", sub: "Unwind and\nrecharge",          color: "#7B3535" },
+];
+
+export default function Controls({ navigation }: any) {
   const [unlocked, setUnlocked] = useState(true);
   const [brightness, setBrightness] = useState(50);
   const [fanSpeed, setFanSpeed] = useState(3);
   const [mode, setMode] = useState("Meeting");
 
-  // ---- Send updates when light or fan changes ----
   useEffect(() => {
     sendControlUpdate(unlocked, brightness, fanSpeed);
   }, [unlocked, brightness, fanSpeed]);
 
-  const increaseBrightness = () =>
-    setBrightness((prev) => Math.min(prev + 10, 100));
-
-  const decreaseBrightness = () =>
-    setBrightness((prev) => Math.max(prev - 10, 0));
-
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
-      <ScrollView contentContainerStyle={{ padding: 20, flexGrow: 1 }}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Image
-              source={require("../images/avatar.png")}
-              style={styles.avatar}
-            />
-            <Text style={styles.title}>Controls</Text>
+          <Pressable onPress={() => navigation.navigate("Settings")}>
+            <Image source={require("../images/avatar.png")} style={styles.avatar} />
+          </Pressable>
+          <Text style={styles.title}>Controls</Text>
+        </View>
+
+        {/* Pod image + Active Session panel */}
+        <View style={styles.sessionRow}>
+          <Image
+            source={require("../images/pod.png")}
+            style={styles.podImage}
+            resizeMode="contain"
+          />
+          <View style={styles.sessionPanel}>
+            <Text style={styles.sessionLabel}>Active Session</Text>
+            <View style={styles.unlockRow}>
+              <Text style={styles.unlockText}>Unlocked</Text>
+              <Switch
+                value={unlocked}
+                onValueChange={setUnlocked}
+                trackColor={{ false: "#ccc", true: "#4CAF50" }}
+                thumbColor="#fff"
+              />
+            </View>
+            <Pressable
+              style={styles.wifiBtn}
+              onPress={() => navigation.navigate("Wifi")}
+            >
+              <Text style={styles.wifiBtnText}>Wi-Fi Settings</Text>
+            </Pressable>
           </View>
         </View>
 
-        {/* Pod Image Placeholder */}
-        <View style={styles.podImage} />
-
-        {/* Unlock */}
-        <View style={styles.row}>
-          <Text>Lights Enabled</Text>
-          <Switch value={unlocked} onValueChange={setUnlocked} />
-        </View>
-
-        {/* Modes */}
-        <Text style={styles.section}>Mode</Text>
-        <View style={styles.modes}>
-          {["Meeting", "Reading", "Relaxation"].map((m) => (
+        {/* Mode */}
+        <Text style={styles.sectionLabel}>Mode</Text>
+        <View style={styles.modesRow}>
+          {modeConfig.map((m) => (
             <Pressable
-              key={m}
-              onPress={() => setMode(m)}
-              style={[
-                styles.modeCard,
-                mode === m && styles.activeMode,
-              ]}
+              key={m.label}
+              onPress={() => setMode(m.label)}
+              style={[styles.modeCard, mode === m.label && styles.modeCardActive]}
             >
-              <Text style={styles.modeTitle}>{m}</Text>
+              <View style={[styles.modeCircle, { backgroundColor: m.color }]} />
+              <Text style={styles.modeTitle}>{m.label}</Text>
+              <Text style={styles.modeSub}>{m.sub}</Text>
             </Pressable>
           ))}
         </View>
 
         {/* Lighting */}
-        <Text style={styles.section}>💡 Lighting</Text>
-        <Text>{brightness}%</Text>
-        <View style={styles.customSlider}>
-          <Pressable onPress={decreaseBrightness}>
-            <Text style={styles.sliderButtonText}>−</Text>
-          </Pressable>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>💡 Lighting</Text>
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={brightness}
+            onValueChange={setBrightness}
+            minimumTrackTintColor="#F5C518"
+            maximumTrackTintColor="#e0e0e0"
+            thumbTintColor="#F5C518"
+          />
+          <Text style={styles.sliderPct}>{brightness}%</Text>
+        </View>
 
-          <View style={styles.sliderTrack}>
-            <View
-              style={[
-                styles.sliderFill,
-                { width: `${brightness}%` },
-              ]}
-            />
+        {/* Fan Speed */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>💨 Fan Speed</Text>
+          <View style={styles.fanRow}>
+            <Pressable onPress={() => setFanSpeed(Math.max(1, fanSpeed - 1))}>
+              <Text style={styles.fanBtn}>−</Text>
+            </Pressable>
+            <Text style={styles.fanValue}>{fanSpeed}</Text>
+            <Pressable onPress={() => setFanSpeed(Math.min(5, fanSpeed + 1))}>
+              <Text style={styles.fanBtn}>+</Text>
+            </Pressable>
           </View>
-
-          <Pressable onPress={increaseBrightness}>
-            <Text style={styles.sliderButtonText}>+</Text>
-          </Pressable>
         </View>
 
-        {/* Fan */}
-        <Text style={styles.section}>💨 Fan Speed</Text>
-        <View style={styles.fanRow}>
-          <Pressable onPress={() => setFanSpeed(Math.max(1, fanSpeed - 1))}>
-            <Text style={styles.fanButton}>−</Text>
-          </Pressable>
-
-          <Text style={styles.fanValue}>{fanSpeed}</Text>
-
-          <Pressable onPress={() => setFanSpeed(Math.min(5, fanSpeed + 1))}>
-            <Text style={styles.fanButton}>+</Text>
-          </Pressable>
-        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    marginBottom: 10,
+  scroll: {
+    padding: 20,
+    paddingBottom: 40,
   },
-  headerLeft: {
+
+  /* Header */
+  header: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginLeft: 12,
+    marginBottom: 20,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    resizeMode: "cover",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginRight: 14,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+  },
+
+  /* Session row */
+  sessionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 24,
   },
   podImage: {
-    height: 160,
-    marginVertical: 10,
-    backgroundColor: "#eee",
-    borderRadius: 10,
+    width: "45%",
+    height: 180,
   },
-  row: {
+  sessionPanel: {
+    flex: 1,
+    paddingLeft: 12,
+  },
+  sessionLabel: {
+    fontSize: 14,
+    color: "#888",
+    marginBottom: 10,
+  },
+  unlockRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginVertical: 10,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
   },
-  section: {
-    marginTop: 20,
-    fontWeight: "bold",
+  unlockText: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  wifiBtn: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  wifiBtnText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "500",
+  },
+
+  /* Mode */
+  sectionLabel: {
     fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 12,
   },
-  modes: {
+  modesRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginBottom: 20,
   },
   modeCard: {
-    backgroundColor: "#f0f0f0",
-    padding: 15,
-    borderRadius: 12,
-    width: "30%",
-  },
-  activeMode: {
-    borderColor: "#056af7",
+    backgroundColor: "#f5f5f5",
+    borderRadius: 14,
+    padding: 12,
+    width: "31%",
+    minHeight: 120,
     borderWidth: 2,
+    borderColor: "transparent",
+  },
+  modeCardActive: {
+    borderColor: "#1E3EA1",
+  },
+  modeCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    position: "absolute",
+    top: 8,
+    right: 8,
   },
   modeTitle: {
     fontWeight: "bold",
-    textAlign: "center",
+    fontSize: 14,
+    marginTop: 48,
+    marginBottom: 4,
   },
-  customSlider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 10,
+  modeSub: {
+    fontSize: 11,
+    color: "#777",
   },
-  sliderTrack: {
-    flex: 1,
-    height: 8,
-    backgroundColor: "#ddd",
-    borderRadius: 4,
-    marginHorizontal: 10,
+
+  /* Card wrapper for lighting / fan */
+  card: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
   },
-  sliderFill: {
-    height: 8,
-    backgroundColor: "#056af7",
-    borderRadius: 4,
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 12,
   },
-  sliderButtonText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    paddingHorizontal: 10,
+
+  /* Lighting slider */
+  slider: {
+    width: "100%",
+    height: 40,
   },
+  sliderPct: {
+    textAlign: "right",
+    color: "#888",
+    fontSize: 13,
+  },
+
+  /* Fan */
   fanRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 10,
+    paddingVertical: 8,
   },
-  fanButton: {
-    fontSize: 30,
-    marginHorizontal: 20,
+  fanBtn: {
+    fontSize: 32,
+    fontWeight: "bold",
+    paddingHorizontal: 28,
+    color: "#333",
   },
   fanValue: {
-    fontSize: 22,
+    fontSize: 32,
     fontWeight: "bold",
+    minWidth: 40,
+    textAlign: "center",
   },
 });

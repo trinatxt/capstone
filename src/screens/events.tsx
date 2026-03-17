@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { SignCardModal, SendMessageModal } from "../components/BirthdayModals";
 import {
   View,
   Text,
@@ -33,6 +34,8 @@ export default function Events({ navigation }: any) {
   const [activeDays, setActiveDays]   = useState<number[]>([6]); // Sunday default
   const [activeTab, setActiveTab]     = useState<"upcoming" | "my">("upcoming");
   const [rsvpIds, setRsvpIds]         = useState<Set<string>>(new Set());
+  const [signCardVisible, setSignCardVisible]       = useState(false);
+  const [sendMessageVisible, setSendMessageVisible] = useState(false);
 
   const handleRsvp = (id: string) => setRsvpIds((prev) => new Set(prev).add(id));
 
@@ -80,15 +83,26 @@ export default function Events({ navigation }: any) {
           <View style={styles.birthdayTextBlock}>
             <Text style={styles.birthdayText}>{"Today is Andrew's\nBirthday!"}</Text>
             <View style={styles.birthdayActions}>
-              <Pressable style={styles.birthdayButton}>
+              <Pressable style={styles.birthdayButton} onPress={() => setSignCardVisible(true)}>
                 <Text style={styles.birthdayButtonText}>Sign Card</Text>
               </Pressable>
-              <Pressable style={styles.birthdayButton}>
+              <Pressable style={styles.birthdayButton} onPress={() => setSendMessageVisible(true)}>
                 <Text style={styles.birthdayButtonText}>Send Message</Text>
               </Pressable>
             </View>
           </View>
         </View>
+
+        <SignCardModal
+          visible={signCardVisible}
+          onClose={() => setSignCardVisible(false)}
+          recipientName="Andrew"
+        />
+        <SendMessageModal
+          visible={sendMessageVisible}
+          onClose={() => setSendMessageVisible(false)}
+          recipientName="Andrew"
+        />
 
         {/* Tab row */}
         <View style={styles.tabRow}>

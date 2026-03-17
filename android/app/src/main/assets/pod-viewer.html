@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Pod Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f8fafc; overflow: hidden; font-family: -apple-system, sans-serif; }
+    canvas { display: block; }
+
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #f8fafc; color: #64748b;
+      font-size: 13px; gap: 14px; z-index: 10;
+      padding: 20px; text-align: center;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e2e8f0;
+      border-top-color: #1E3EA1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #hint {
+      position: fixed; bottom: 12px; left: 0; right: 0;
+      text-align: center; color: rgba(0,0,0,0.3);
+      font-size: 11px; pointer-events: none;
+    }
+    #selected-label {
+      position: fixed; top: 10px; left: 0; right: 0;
+      text-align: center; color: rgba(0,0,0,0.45);
+      font-size: 11px; pointer-events: none; letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading"><div class="spinner"></div><span>Loading model…</span></div>
+  <div id="hint">Drag to rotate · Pinch to zoom · Tap to inspect</div>
+  <div id="selected-label"></div>
+
+  <!--
+    Classic (non-module) Three.js scripts.
+    These avoid the file:// CORS restriction that type="module" scripts impose on Android WebView.
+    Using r134 — last stable version with full examples/js/ classic builds.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/loaders/DRACOLoader.js"></script>
+
+  <script>
+    var loadingEl = document.getElementById('loading');
+    var loadingText = loadingEl.querySelector('span');
+    var selectedLabel = document.getElementById('selected-label');
+
+    function setStatus(msg) { loadingText.textContent = msg; }
+    function sendToRN(payload) {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+      }
+    }
+
+    // ── Renderer ────────────────────────────────────────────────────────────
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // ── Scene ────────────────────────────────────────────────────────────────
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf8fafc);
+
+    // ── Camera ───────────────────────────────────────────────────────────────
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 500);
+    camera.position.set(3, 2.5, 4);
+
+    // ── Lights ───────────────────────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+
+    var key = new THREE.DirectionalLight(0xffffff, 2.5);
+    key.position.set(4, 8, 4);
+    key.castShadow = true;
+    scene.add(key);
+
+    scene.add(new THREE.HemisphereLight(0x38bdf8, 0x1e293b, 0.6));
+
+    // ── Controls ─────────────────────────────────────────────────────────────
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.minDistance = 0.3;
+    controls.maxDistance = 30;
+    controls.maxPolarAngle = Math.PI / 1.8;
+
+    // ── Load GLB ─────────────────────────────────────────────────────────────
+    var interactiveMeshes = [];
+    var loader = new THREE.GLTFLoader();
+
+    // Draco decoder from Google's stable CDN
+    var draco = new THREE.DRACOLoader();
+    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+    loader.setDRACOLoader(draco);
+
+    // ── Load via XHR (fetch() is blocked on Android file:// origins) ───────
+    function onGltfLoaded(gltf) {
+      var model = gltf.scene;
+
+      // Auto-center and scale to fit view
+      var box = new THREE.Box3().setFromObject(model);
+      var center = box.getCenter(new THREE.Vector3());
+      var size = box.getSize(new THREE.Vector3());
+      var maxDim = Math.max(size.x, size.y, size.z);
+      var scale = 3.0 / maxDim;
+      model.scale.setScalar(scale);
+      model.position.sub(center.multiplyScalar(scale));
+
+      // Collect meshes, store original emissive
+      model.traverse(function(child) {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          var mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach(function(m) {
+            m._emOrig = m.emissive ? m.emissive.clone() : new THREE.Color(0,0,0);
+            m._eiOrig = m.emissiveIntensity !== undefined ? m.emissiveIntensity : 0;
+          });
+          interactiveMeshes.push(child);
+        }
+      });
+
+      scene.add(model);
+
+      // Re-center camera on loaded model
+      var nb = new THREE.Box3().setFromObject(model);
+      var nc = nb.getCenter(new THREE.Vector3());
+      controls.target.copy(nc);
+      camera.position.set(nc.x + 3, nc.y + 2, nc.z + 3.5);
+      controls.update();
+
+      loadingEl.style.display = 'none';
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'file:///android_asset/pod.glb', true);
+    xhr.responseType = 'arraybuffer';
+
+    xhr.onprogress = function(e) {
+      if (e.lengthComputable && e.total > 0) {
+        setStatus('Loading model… ' + Math.round((e.loaded / e.total) * 100) + '%');
+      }
+    };
+
+    xhr.onload = function() {
+      // status 0 is success for file:// in Android WebView
+      if (xhr.status === 200 || xhr.status === 0) {
+        setStatus('Parsing model…');
+        loader.parse(
+          xhr.response,
+          '',
+          onGltfLoaded,
+          function(err) {
+            var msg = err instanceof Error ? err.message : String(err);
+            setStatus('Parse error: ' + msg);
+            sendToRN({ error: 'parse: ' + msg });
+          }
+        );
+      } else {
+        var msg = 'XHR status ' + xhr.status;
+        setStatus('Error: ' + msg);
+        sendToRN({ error: msg });
+      }
+    };
+
+    xhr.onerror = function() {
+      var msg = 'XHR failed — pod.glb not found in android_asset';
+      setStatus('Error: ' + msg);
+      sendToRN({ error: msg });
+    };
+
+    xhr.send();
+
+    // ── Raycaster ────────────────────────────────────────────────────────────
+    var raycaster = new THREE.Raycaster();
+    var pointer = new THREE.Vector2();
+    var selectedMesh = null;
+
+    function resolveArea(name) {
+      var n = (name || '').toLowerCase();
+      if (n.includes('desk') || n.includes('worktop')) return 'desk';
+      if (n.includes('light') || n.includes('lamp') || n.includes('ceil') || n.includes('panel')) return 'lighting';
+      if (n.includes('fan') || n.includes('ac') || n.includes('vent') || n.includes('hvac')) return 'fan';
+      if (n.includes('chair') || n.includes('seat') || n.includes('sofa')) return 'seating';
+      if (n.includes('door') || n.includes('wall') || n.includes('glass') || n.includes('window')) return 'structure';
+      if (n.includes('table') || n.includes('meet')) return 'meeting_table';
+      return 'pod';
+    }
+
+    function highlight(mesh, on) {
+      var mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mats.forEach(function(m) {
+        if (on) {
+          m.emissive = new THREE.Color(0x3b82f6);
+          m.emissiveIntensity = 0.4;
+        } else {
+          m.emissive = m._emOrig ? m._emOrig.clone() : new THREE.Color(0,0,0);
+          m.emissiveIntensity = m._eiOrig || 0;
+        }
+      });
+    }
+
+    var touchStartX = 0, touchStartY = 0;
+
+    function onTap(cx, cy) {
+      if (interactiveMeshes.length === 0) return;
+      pointer.x = (cx / window.innerWidth) * 2 - 1;
+      pointer.y = -(cy / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      var hits = raycaster.intersectObjects(interactiveMeshes, false);
+      if (!hits.length) return;
+      var hit = hits[0].object;
+      if (selectedMesh && selectedMesh !== hit) highlight(selectedMesh, false);
+      highlight(hit, true);
+      selectedMesh = hit;
+      selectedLabel.textContent = hit.name || 'Pod part';
+      sendToRN({ area: resolveArea(hit.name), meshName: hit.name });
+    }
+
+    renderer.domElement.addEventListener('touchstart', function(e) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    renderer.domElement.addEventListener('touchend', function(e) {
+      if (!e.changedTouches.length) return;
+      var t = e.changedTouches[0];
+      if (Math.abs(t.clientX - touchStartX) < 8 && Math.abs(t.clientY - touchStartY) < 8) {
+        onTap(t.clientX, t.clientY);
+      }
+    }, { passive: true });
+
+    renderer.domElement.addEventListener('click', function(e) { onTap(e.clientX, e.clientY); });
+
+    // ── Resize ───────────────────────────────────────────────────────────────
+    window.addEventListener('resize', function() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── Render loop ──────────────────────────────────────────────────────────
+    (function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    })();
+  </script>
+</body>
+</html>

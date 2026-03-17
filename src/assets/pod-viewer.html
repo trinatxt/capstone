@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Pod Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f172a; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+    #label {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.6);
+      font-family: sans-serif;
+      font-size: 12px;
+      pointer-events: none;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="label">Tap a zone to see stats</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ── Scene ──────────────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+    scene.fog = new THREE.Fog(0x0f172a, 15, 30);
+
+    // ── Camera ─────────────────────────────────────────────────────────────
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(5, 6, 8);
+    camera.lookAt(0, 0, 0);
+
+    // ── Renderer ───────────────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    // ── Lights ─────────────────────────────────────────────────────────────
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(5, 10, 5);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(1024, 1024);
+    scene.add(dirLight);
+
+    const pointLight = new THREE.PointLight(0x4fc3f7, 1.5, 10);
+    pointLight.position.set(0, 3, 0);
+    scene.add(pointLight);
+
+    // ── Helper: make a labeled mesh ────────────────────────────────────────
+    function makeBox(name, w, h, d, color, x, y, z) {
+      const geo = new THREE.BoxGeometry(w, h, d);
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.6,
+        metalness: 0.1,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = name;
+      mesh.position.set(x, y, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      return mesh;
+    }
+
+    // ── Pod Structure ──────────────────────────────────────────────────────
+    // Floor
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 })
+    );
+    floor.name = 'floor';
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Walls (non-interactive, no name)
+    function makeWall(w, h, d, x, y, z, ry) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({ color: 0x1e3a5f, roughness: 0.8, transparent: true, opacity: 0.5 })
+      );
+      mesh.position.set(x, y, z);
+      mesh.rotation.y = ry;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+    }
+    makeWall(8, 3, 0.1, 0, 1.5, -4, 0);    // back wall
+    makeWall(0.1, 3, 8, -4, 1.5, 0, 0);     // left wall
+    makeWall(0.1, 3, 8, 4, 1.5, 0, 0);      // right wall
+
+    // ── Interactive Zones ──────────────────────────────────────────────────
+    const interactiveMeshes = [];
+
+    // Desk (blue) — top-left quadrant
+    const desk = makeBox('desk', 2.5, 0.12, 1.2, 0x2563eb, -1.5, 0.7, -1.5);
+    // Desk legs
+    makeBox('desk', 0.1, 0.7, 0.1, 0x1e40af, -2.6, 0.35, -2.0);
+    makeBox('desk', 0.1, 0.7, 0.1, 0x1e40af, -0.4, 0.35, -2.0);
+    makeBox('desk', 0.1, 0.7, 0.1, 0x1e40af, -2.6, 0.35, -1.0);
+    makeBox('desk', 0.1, 0.7, 0.1, 0x1e40af, -0.4, 0.35, -1.0);
+    interactiveMeshes.push(desk);
+
+    // Monitor on desk (part of desk zone)
+    const monitor = makeBox('desk', 0.08, 0.8, 0.6, 0x0f172a, -1.5, 1.2, -1.9);
+    interactiveMeshes.push(monitor);
+
+    // Meeting Table (green) — centre
+    const table = makeBox('meeting_table', 2.8, 0.1, 1.6, 0x059669, 1, 0.6, 0.5);
+    // Chairs around table
+    makeBox('meeting_table', 0.6, 0.06, 0.6, 0x065f46, 0.2, 0.45, 1.6);
+    makeBox('meeting_table', 0.6, 0.06, 0.6, 0x065f46, 1.0, 0.45, 1.6);
+    makeBox('meeting_table', 0.6, 0.06, 0.6, 0x065f46, 1.8, 0.45, 1.6);
+    makeBox('meeting_table', 0.6, 0.06, 0.6, 0x065f46, 1.0, 0.45, -0.6);
+    interactiveMeshes.push(table);
+
+    // Lighting Panel (yellow) — ceiling-mounted
+    const lighting = makeBox('lighting', 1.5, 0.08, 1.5, 0xf59e0b, 0, 2.9, -2);
+    // Glow under it
+    const glowLight = new THREE.PointLight(0xfef3c7, 0.8, 4);
+    glowLight.position.set(0, 2.7, -2);
+    scene.add(glowLight);
+    interactiveMeshes.push(lighting);
+
+    // Fan / AC Unit (cyan) — wall-mounted top-right
+    const fan = makeBox('fan', 0.9, 0.5, 0.2, 0x0891b2, 3.0, 2.4, -2.5);
+    // Fan blades (static)
+    makeBox('fan', 0.6, 0.04, 0.04, 0x0e7490, 3.0, 2.4, -2.3);
+    makeBox('fan', 0.04, 0.6, 0.04, 0x0e7490, 3.0, 2.4, -2.3);
+    interactiveMeshes.push(fan);
+
+    // ── Grid helper ────────────────────────────────────────────────────────
+    const grid = new THREE.GridHelper(8, 16, 0x1e3a5f, 0x1e293b);
+    grid.position.y = 0.01;
+    scene.add(grid);
+
+    // ── OrbitControls ──────────────────────────────────────────────────────
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 4;
+    controls.maxDistance = 18;
+    controls.maxPolarAngle = Math.PI / 2.1;
+    controls.target.set(0, 0.5, 0);
+
+    // ── Raycaster ──────────────────────────────────────────────────────────
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let selectedMesh = null;
+    const originalColors = new Map();
+    interactiveMeshes.forEach(m => originalColors.set(m, m.material.color.clone()));
+
+    function onTap(clientX, clientY) {
+      pointer.x = (clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(interactiveMeshes, false);
+      if (hits.length > 0) {
+        const hit = hits[0].object;
+        // Reset previous selection
+        if (selectedMesh) {
+          selectedMesh.material.emissive.set(0x000000);
+          selectedMesh.material.emissiveIntensity = 0;
+        }
+        // Highlight new selection
+        hit.material.emissive.set(0xffffff);
+        hit.material.emissiveIntensity = 0.15;
+        selectedMesh = hit;
+
+        // Send to React Native
+        const msg = JSON.stringify({ area: hit.name });
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(msg);
+        } else {
+          console.log('Selected:', hit.name);
+        }
+
+        // Update label
+        document.getElementById('label').textContent = hit.name.replace('_', ' ').toUpperCase();
+      }
+    }
+
+    // Touch events (mobile)
+    renderer.domElement.addEventListener('touchend', (e) => {
+      if (e.changedTouches.length > 0) {
+        const t = e.changedTouches[0];
+        onTap(t.clientX, t.clientY);
+      }
+    }, { passive: true });
+
+    // Click events (desktop / emulator)
+    renderer.domElement.addEventListener('click', (e) => {
+      onTap(e.clientX, e.clientY);
+    });
+
+    // ── Resize ─────────────────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // ── Animate ────────────────────────────────────────────────────────────
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      // Slowly rotate fan blades (optional visual flair)
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

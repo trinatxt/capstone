@@ -35,7 +35,7 @@ export default function SignIn({ navigation }: any) {
           { backgroundColor: pressed ? "#E0E0E0" : "#EFEFEF", marginTop: 12 },
         ]}
       >
-        <Text style={styles.buttonSecondaryText}>Sign in with Delta</Text>
+        <Text style={styles.buttonSecondaryText}>Sign in</Text>
       </Pressable>
     </View>
   );

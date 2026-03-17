@@ -8,7 +8,7 @@ import {
   Dimensions,
   ScrollView,
 } from "react-native";
-import Carousel from "react-native-snap-carousel";
+import { SignCardModal, SendMessageModal, ReceivedCardsModal } from "../components/BirthdayModals";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -46,6 +46,9 @@ const knockers = [
 
 export default function HomePage({ navigation }: any) {
   const carouselRef = useRef(null);
+  const [signCardVisible, setSignCardVisible] = useState(false);
+  const [sendMessageVisible, setSendMessageVisible] = useState(false);
+  const [myBirthdayVisible, setMyBirthdayVisible] = useState(false);
   const [knockedIds, setKnockedIds] = useState<Set<string>>(new Set());
   const knockTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [dismissedKnockers, setDismissedKnockers] = useState<Set<string>>(new Set());
@@ -95,21 +98,85 @@ export default function HomePage({ navigation }: any) {
         </View>
       </View>
 
-      {/* Birthday Card */}
-      <View style={styles.birthdayCard}>
-        <Text style={styles.birthdayEmoji}>🎂</Text>
-        <View style={styles.birthdayTextBlock}>
-          <Text style={styles.birthdayText}>{"Today is Andrew's\nBirthday!"}</Text>
+      {/* Birthday Cards - horizontally scrollable */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.bdCardsContainer}
+        style={styles.bdCardsScroll}
+      >
+        {/* My Birthday Card */}
+        <View style={styles.myBirthdayCard}>
+          <View style={styles.myBdDecorTL} />
+          <View style={styles.myBdDecorBR} />
+
+          <View style={styles.myBdTop}>
+            <Text style={styles.myBdEmoji}>🎂</Text>
+            <View style={styles.myBdBadge}>
+              <Text style={styles.myBdBadgeText}>Your Birthday</Text>
+            </View>
+          </View>
+
+          <Text style={styles.myBdTitle}>Happy Birthday,{"\n"}Lee Wan Wei! 🥳</Text>
+          <Text style={styles.myBdSub}>3 colleagues signed your card today</Text>
+
+          <View style={styles.myBdAvatarRow}>
+            {["J", "A", "S"].map((initial, i) => (
+              <View
+                key={i}
+                style={[styles.myBdAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 3 - i }]}
+              >
+                <Text style={styles.myBdAvatarText}>{initial}</Text>
+              </View>
+            ))}
+            <Text style={styles.myBdAvatarLabel}>Jane, Anna & Simin</Text>
+          </View>
+
+          <Pressable style={styles.myBdButton} onPress={() => setMyBirthdayVisible(true)}>
+            <Text style={styles.myBdButtonText}>View Your Cards  🎁</Text>
+          </Pressable>
+        </View>
+
+        {/* Andrew's Birthday Card */}
+        <View style={styles.birthdayCard}>
+          <View style={styles.bdDecorTL} />
+          <View style={styles.bdDecorBR} />
+
+          <View style={styles.birthdayTop}>
+            <Text style={styles.birthdayEmoji}>🎉</Text>
+            <View style={styles.birthdayBadge}>
+              <Text style={styles.birthdayBadgeText}>Colleague's Birthday</Text>
+            </View>
+          </View>
+
+          <Text style={styles.birthdayText}>{"Today is\nAndrew's Birthday!"}</Text>
+          <Text style={styles.birthdaySub}>Show him some love from the team 💙</Text>
+
           <View style={styles.birthdayActions}>
-            <Pressable style={styles.birthdayButton}>
-              <Text style={styles.birthdayButtonText}>Sign Card</Text>
+            <Pressable style={styles.birthdayButton} onPress={() => setSignCardVisible(true)}>
+              <Text style={styles.birthdayButtonText}>✍️  Sign Card</Text>
             </Pressable>
-            <Pressable style={styles.birthdayButton}>
-              <Text style={styles.birthdayButtonText}>Send Message</Text>
+            <Pressable style={[styles.birthdayButton, styles.birthdayButtonOutline]} onPress={() => setSendMessageVisible(true)}>
+              <Text style={styles.birthdayButtonTextOutline}>✉️  Message</Text>
             </Pressable>
           </View>
         </View>
-      </View>
+      </ScrollView>
+
+      <SignCardModal
+        visible={signCardVisible}
+        onClose={() => setSignCardVisible(false)}
+        recipientName="Andrew"
+      />
+      <SendMessageModal
+        visible={sendMessageVisible}
+        onClose={() => setSendMessageVisible(false)}
+        recipientName="Andrew"
+      />
+      <ReceivedCardsModal
+        visible={myBirthdayVisible}
+        onClose={() => setMyBirthdayVisible(false)}
+      />
 
       {/* Knock Section - horizontally scrollable cards */}
       {activeKnockers.length === 0 && dismissedKnockers.size > 0 && (
@@ -230,50 +297,191 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  /* Birthday Card */
-  birthdayCard: {
-    backgroundColor: "#1E3EA1",
-    borderRadius: 18,
-    padding: 20,
-    marginHorizontal: 20,
+  /* Birthday cards scroll */
+  bdCardsScroll: {
     marginBottom: 24,
+  },
+  bdCardsContainer: {
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+
+  /* My Birthday Card */
+  myBirthdayCard: {
+    width: screenWidth - 60,
+    backgroundColor: "#92400e",
+    borderRadius: 22,
+    padding: 20,
+    overflow: "hidden",
+    gap: 10,
+  },
+  myBdDecorTL: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(251,191,36,0.18)",
+    top: -30,
+    left: -30,
+  },
+  myBdDecorBR: {
+    position: "absolute",
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "rgba(251,191,36,0.12)",
+    bottom: -25,
+    right: -20,
+  },
+  myBdTop: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    gap: 10,
+  },
+  myBdEmoji: {
+    fontSize: 36,
+  },
+  myBdBadge: {
+    backgroundColor: "#F59E0B",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  myBdBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  myBdTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    lineHeight: 28,
+  },
+  myBdSub: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+  },
+  myBdAvatarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  myBdAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#F59E0B",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#92400e",
+  },
+  myBdAvatarText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  myBdAvatarLabel: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 12,
+    marginLeft: 14,
+  },
+  myBdButton: {
+    backgroundColor: "#F59E0B",
+    borderRadius: 16,
+    paddingVertical: 11,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  myBdButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
   },
 
+  /* Andrew's Birthday Card */
+  birthdayCard: {
+    width: screenWidth - 60,
+    backgroundColor: "#1E3EA1",
+    borderRadius: 22,
+    padding: 20,
+    overflow: "hidden",
+    gap: 10,
+  },
+  bdDecorTL: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    top: -30,
+    left: -30,
+  },
+  bdDecorBR: {
+    position: "absolute",
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    bottom: -25,
+    right: -20,
+  },
+  birthdayTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   birthdayEmoji: {
-    fontSize: 52,
-    marginRight: 16,
+    fontSize: 36,
   },
-
-  birthdayTextBlock: {
-    flex: 1,
+  birthdayBadge: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-
+  birthdayBadgeText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   birthdayText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 16,
+    lineHeight: 28,
   },
-
+  birthdaySub: {
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 13,
+  },
   birthdayActions: {
     flexDirection: "row",
     gap: 10,
+    marginTop: 4,
   },
-
   birthdayButton: {
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.6)",
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 20,
+    flex: 1,
+    backgroundColor: "#fff",
+    paddingVertical: 11,
+    borderRadius: 16,
+    alignItems: "center",
   },
-
   birthdayButtonText: {
+    color: "#1E3EA1",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  birthdayButtonOutline: {
+    backgroundColor: "transparent",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.5)",
+  },
+  birthdayButtonTextOutline: {
     color: "#fff",
-    fontWeight: "600",
-    fontSize: 11,
+    fontWeight: "700",
+    fontSize: 13,
   },
 
   /* Knock Section */

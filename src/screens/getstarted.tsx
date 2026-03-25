@@ -29,7 +29,7 @@ export default function GetStarted({ navigation }: any) {
       </Pressable>
 
       <Pressable
-        onPress={() => navigation.replace("MainTabs")}
+        onPress={() => navigation.replace("OfficeTabs")}
         style={({ pressed }) => [
             styles.button,
             { backgroundColor: pressed ? "#0097f6" : "#056af7", marginTop: 20 },

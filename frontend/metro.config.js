@@ -12,6 +12,18 @@ const config = {
   resolver: {
     assetExts: [...defaultConfig.resolver.assetExts, 'glb', 'gltf', 'html'],
   },
+  watchFolders: [],
+  watcher: {
+    additionalExts: [],
+    watchman: {
+      deferStates: [],
+    },
+  },
+  blockList: [
+    /frontend\/android\/app\/\.cxx\/.*/,
+    /frontend\/android\/build\/.*/,
+    /frontend\/android\/app\/build\/.*/,
+  ],
 };
 
 module.exports = mergeConfig(defaultConfig, config);

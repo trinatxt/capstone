@@ -1,4 +1,5 @@
 import React from "react";
+import { useUser } from "../context/UserContext";
 import {
   View,
   Text,
@@ -15,12 +16,13 @@ const menuItems = [
 ];
 
 export default function Settings() {
+  const { user } = useUser();
   return (
     <SafeAreaView style={styles.container}>
       {/* Avatar + Name */}
       <View style={styles.profileRow}>
         <Image source={require("../images/avatar.png")} style={styles.avatar} />
-        <Text style={styles.name}>Lee Wan Wei</Text>
+        <Text style={styles.name}>{user?.full_name || user?.username}</Text>
       </View>
 
       {/* Menu items */}

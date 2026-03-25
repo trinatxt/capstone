@@ -1,41 +1,37 @@
 import React from "react";
 import { View, Text, Image, Pressable, StyleSheet } from "react-native";
-import GetStarted from "./getstarted";
 
 export default function SignIn({ navigation }: any) {
   return (
     <View style={styles.container}>
-      {/* Logo */}
       <Image
         source={require("../images/logo.png")}
         style={styles.logo}
         resizeMode="contain"
       />
 
-      {/* Two-line welcome text */}
       <Text style={styles.title}>
-        Secure access to your IoT-enabled{'\n'}Smart Meeting Pods
+        Secure access to your IoT-enabled{"\n"}Smart Meeting Pods
       </Text>
 
-      {/* Modern Pressable button */}
       <Pressable
-        onPress={() => navigation.navigate("GetStarted")}
+        onPress={() => navigation.navigate("SignInCredentials")}
         style={({ pressed }) => [
           styles.button,
           { backgroundColor: pressed ? "#0097f6" : "#056af7" },
         ]}
       >
-        <Text style={styles.buttonText}>Get Started</Text>
+        <Text style={styles.buttonText}>Sign In</Text>
       </Pressable>
 
       <Pressable
-        onPress={() => navigation.navigate("signdelta")}
+        onPress={() => navigation.navigate("SignUp")}
         style={({ pressed }) => [
-          styles.buttonSecondary,
-          { backgroundColor: pressed ? "#E0E0E0" : "#EFEFEF", marginTop: 12 },
+          styles.buttonOutline,
+          { borderColor: pressed ? "#0097f6" : "#056af7" },
         ]}
       >
-        <Text style={styles.buttonSecondaryText}>Sign in</Text>
+        <Text style={styles.buttonOutlineText}>Get Started</Text>
       </Pressable>
     </View>
   );
@@ -73,15 +69,18 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
   },
-  buttonSecondary: {
+  buttonOutline: {
     width: "100%",
     height: 50,
     borderRadius: 25,
+    borderWidth: 1.5,
     justifyContent: "center",
     alignItems: "center",
+    marginTop: 12,
+    backgroundColor: "#fff",
   },
-  buttonSecondaryText: {
-    color: "#1a1a1a",
+  buttonOutlineText: {
+    color: "#056af7",
     fontSize: 18,
     fontWeight: "bold",
     textAlign: "center",

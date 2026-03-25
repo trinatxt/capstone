@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SignCardModal, SendMessageModal, ReceivedCardsModal } from "../components/BirthdayModals";
+import { useUser } from "../context/UserContext";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -45,6 +46,7 @@ const knockers = [
 ];
 
 export default function HomePage({ navigation }: any) {
+  const { user } = useUser();
   const carouselRef = useRef(null);
   const [signCardVisible, setSignCardVisible] = useState(false);
   const [sendMessageVisible, setSendMessageVisible] = useState(false);
@@ -94,7 +96,7 @@ export default function HomePage({ navigation }: any) {
         </Pressable>
         <View>
           <Text style={styles.welcome}>Welcome,</Text>
-          <Text style={styles.name}>Lee Wan Wei</Text>
+          <Text style={styles.name}>{user?.full_name || user?.username}</Text>
         </View>
       </View>
 
@@ -117,7 +119,7 @@ export default function HomePage({ navigation }: any) {
             </View>
           </View>
 
-          <Text style={styles.myBdTitle}>Happy Birthday,{"\n"}Lee Wan Wei! 🥳</Text>
+          <Text style={styles.myBdTitle}>Happy Birthday,{"\n"}{user?.full_name || user?.username}! 🥳</Text>
           <Text style={styles.myBdSub}>3 colleagues signed your card today</Text>
 
           <View style={styles.myBdAvatarRow}>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useUser } from "../context/UserContext";
 import {
   View,
   Text,
@@ -42,6 +43,7 @@ const bookings = [
 ];
 
 export default function OfficeHomePage({ navigation }: any) {
+  const { user } = useUser();
   const [activeIndex, setActiveIndex] = useState(0);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -58,7 +60,7 @@ export default function OfficeHomePage({ navigation }: any) {
         </Pressable>
         <View>
           <Text style={styles.welcome}>Welcome,</Text>
-          <Text style={styles.name}>Lee Wan Wei</Text>
+          <Text style={styles.name}>{user?.full_name || user?.username}</Text>
         </View>
       </View>
 

@@ -28,7 +28,10 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
+import { UserProvider } from "./src/context/UserContext";
 import SignIn from "./src/screens/signin";
+import SignInCredentials from "./src/screens/SignInCredentials";
+import SignUp from "./src/screens/signup";
 import GetStarted from "./src/screens/getstarted";
 import TabNavigator from "./src/navigation/TabNavigator";
 import OfficeTabNavigator from "./src/navigation/OfficeTabNavigator";
@@ -41,9 +44,12 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
+    <UserProvider>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="SignIn" component={SignIn} />
+        <Stack.Screen name="SignInCredentials" component={SignInCredentials} />
+        <Stack.Screen name="SignUp" component={SignUp} />
         <Stack.Screen name="GetStarted" component={GetStarted} />
 
         <Stack.Screen name="MainTabs" component={TabNavigator} />
@@ -58,5 +64,6 @@ export default function App() {
         />
       </Stack.Navigator>
     </NavigationContainer>
+    </UserProvider>
   );
 }

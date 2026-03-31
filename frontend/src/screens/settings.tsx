@@ -10,12 +10,12 @@ import {
 } from "react-native";
 
 const menuItems = [
-  { label: "Profile Settings" },
-  { label: "Privacy & Security" },
-  { label: "Help & Support" },
+  { label: "Profile Settings", screen: "ProfileSettings" },
+  { label: "Privacy & Security", screen: null },
+  { label: "Help & Support", screen: null },
 ];
 
-export default function Settings() {
+export default function Settings({ navigation }: any) {
   const { user } = useUser();
   return (
     <SafeAreaView style={styles.container}>
@@ -28,8 +28,13 @@ export default function Settings() {
       {/* Menu items */}
       <View style={styles.menu}>
         {menuItems.map((item) => (
-          <Pressable key={item.label} style={styles.menuItem}>
+          <Pressable
+            key={item.label}
+            style={styles.menuItem}
+            onPress={() => item.screen && navigation.navigate(item.screen)}
+          >
             <Text style={styles.menuText}>{item.label}</Text>
+            <Text style={styles.menuArrow}>›</Text>
           </Pressable>
         ))}
       </View>
@@ -65,9 +70,18 @@ const styles = StyleSheet.create({
   },
   menuItem: {
     paddingVertical: 18,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
   },
   menuText: {
-    fontSize: 20,
+    fontSize: 18,
     color: "#111",
+  },
+  menuArrow: {
+    fontSize: 22,
+    color: "#bbb",
   },
 });

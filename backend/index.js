@@ -34,6 +34,33 @@ async function publishToIoT(topic, payload, qos = 0) {
   await iotClient.send(command);
 }
 
+// ==================== DB Init ====================
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER REFERENCES users(id),
+      pod_id       TEXT,
+      pod_name     TEXT NOT NULL,
+      location     TEXT,
+      booking_date DATE    NOT NULL DEFAULT CURRENT_DATE,
+      time_label   TEXT,
+      people_count INTEGER DEFAULT 1,
+      status       TEXT    DEFAULT 'active',
+      created_at   TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS events (
+      id          SERIAL PRIMARY KEY,
+      title       TEXT NOT NULL,
+      date_label  TEXT,
+      icon        TEXT DEFAULT '📅',
+      created_by  INTEGER REFERENCES users(id),
+      created_at  TIMESTAMP DEFAULT NOW()
+    );
+  `);
+}
+initDB().catch(console.error);
+
 // ==================== Test Route ====================
 app.get("/", (req, res) => {
   res.send("Smart Pod backend is running");
@@ -137,8 +164,40 @@ app.post("/api/login", async (req, res) => {
         username: user.username,
         full_name: user.full_name,
         birthday: user.birthday,
-        preferred_modes: user.preferred_modes,
+        preferred_modes: fromModeArray(user.preferred_modes),
       },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Normalize preferred_modes: DB stores TEXT[], frontend expects string | null
+function toModeArray(val) {
+  if (!val) return null;
+  return Array.isArray(val) ? val : [val];
+}
+function fromModeArray(val) {
+  if (!val) return null;
+  return Array.isArray(val) ? (val[0] || null) : val;
+}
+
+// Update user profile
+app.put("/api/users/:id", async (req, res) => {
+  const { full_name, birthday, preferred_modes } = req.body;
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET full_name = $1, birthday = $2, preferred_modes = $3
+       WHERE id = $4
+       RETURNING id, username, full_name, birthday, preferred_modes`,
+      [full_name || null, birthday || null, toModeArray(preferred_modes), req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      user: { ...row, preferred_modes: fromModeArray(row.preferred_modes) },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -295,7 +354,7 @@ app.put("/api/pods/:id/hardware", async (req, res) => {
     fan_speed = Number(fan_speed);
     if (!Number.isFinite(fan_speed)) fan_speed = 3;
 
-    fan_speed = Math.max(3, Math.min(5, fan_speed));
+    fan_speed = Math.max(1, Math.min(5, fan_speed));
 
     const result = await pool.query(
       `
@@ -468,6 +527,107 @@ app.post("/api/pods/:id/push-state", async (req, res) => {
     });
   } catch (err) {
     console.error("Push-state publish error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================
+// ====================== BOOKINGS ==============================
+// =============================================================
+
+// GET /api/bookings?user_id=X&filter=today|upcoming|cancelled
+app.get("/api/bookings", async (req, res) => {
+  const { user_id, filter } = req.query;
+  try {
+    let whereClause = "WHERE 1=1";
+    const params = [];
+
+    if (user_id) {
+      params.push(user_id);
+      whereClause += ` AND user_id = $${params.length}`;
+    }
+
+    if (filter === "today") {
+      whereClause += " AND booking_date = CURRENT_DATE AND status = 'active'";
+    } else if (filter === "upcoming") {
+      whereClause += " AND booking_date > CURRENT_DATE AND status = 'active'";
+    } else if (filter === "cancelled") {
+      whereClause += " AND status = 'cancelled'";
+    } else {
+      whereClause += " AND status = 'active'";
+    }
+
+    const result = await pool.query(
+      `SELECT * FROM bookings ${whereClause} ORDER BY booking_date ASC, id ASC`,
+      params
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/bookings
+app.post("/api/bookings", async (req, res) => {
+  const { user_id, pod_id, pod_name, location, booking_date, time_label, people_count } = req.body;
+  if (!pod_name) return res.status(400).json({ error: "pod_name is required" });
+  try {
+    const result = await pool.query(
+      `INSERT INTO bookings (user_id, pod_id, pod_name, location, booking_date, time_label, people_count)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [user_id || null, pod_id || null, pod_name, location || null,
+       booking_date || null, time_label || null, people_count || 1]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/bookings/:id/cancel
+app.put("/api/bookings/:id/cancel", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE bookings SET status = 'cancelled' WHERE id = $1 RETURNING *",
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "Booking not found" });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================
+// ======================== EVENTS ==============================
+// =============================================================
+
+// GET /api/events
+app.get("/api/events", async (_req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM events ORDER BY created_at ASC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/events
+app.post("/api/events", async (req, res) => {
+  const { title, date_label, icon, created_by } = req.body;
+  if (!title) return res.status(400).json({ error: "title is required" });
+  try {
+    const result = await pool.query(
+      `INSERT INTO events (title, date_label, icon, created_by)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [title, date_label || null, icon || "📅", created_by || null]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

@@ -11,7 +11,7 @@ import {
   ScrollView,
 } from "react-native";
 
-const API_URL = "http://10.32.62.190:5000";
+import { API_URL } from "../api/apiClient";
 
 export default function SignInCredentials({ navigation }: any) {
   const { setUser } = useUser();

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useUser } from "../context/UserContext";
 import {
   View,
@@ -12,39 +12,40 @@ import {
   NativeScrollEvent,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { API_URL } from "../api/apiClient";
 
 const screenWidth = Dimensions.get("window").width;
 
-const bookings = [
-  {
-    id: "1",
-    title: "Delta Pod 2",
-    location: "Floor 4, Office 2",
-    time: "Oct 15, 12:00 - 12:30 PM",
-    people: 4,
-    image: require("../images/office.png"),
-  },
-  {
-    id: "2",
-    title: "Delta Pod 5",
-    location: "Floor 5, Office 1",
-    time: "Oct 16, 14:00 - 14:30 PM",
-    people: 3,
-    image: require("../images/office.png"),
-  },
-  {
-    id: "3",
-    title: "Delta Pod 8",
-    location: "Floor 3, Office 3",
-    time: "Oct 17, 10:00 - 11:00 AM",
-    people: 5,
-    image: require("../images/office.png"),
-  },
-];
+type Booking = {
+  id: string;
+  title: string;
+  location: string;
+  time: string;
+  people: number;
+};
 
 export default function OfficeHomePage({ navigation }: any) {
   const { user } = useUser();
   const [activeIndex, setActiveIndex] = useState(0);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`${API_URL}/api/bookings?user_id=${user.id}`)
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        setBookings(
+          data.map((b) => ({
+            id: String(b.id),
+            title: b.pod_name,
+            location: b.location || "",
+            time: b.time_label || "",
+            people: b.people_count || 1,
+          }))
+        );
+      })
+      .catch(() => {});
+  }, [user?.id]);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);

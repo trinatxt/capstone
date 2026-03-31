@@ -39,6 +39,7 @@ import MakeBooking from "./src/screens/MakeBooking";
 import ViewBookings from "./src/screens/ViewBookings";
 import Wifi from "./src/screens/wifi";
 import Settings from "./src/screens/settings";
+import ProfileSettings from "./src/screens/ProfileSettings";
 
 const Stack = createNativeStackNavigator();
 
@@ -62,6 +63,7 @@ export default function App() {
           component={Settings}
           options={{ animation: "slide_from_left" }}
         />
+        <Stack.Screen name="ProfileSettings" component={ProfileSettings} />
       </Stack.Navigator>
     </NavigationContainer>
     </UserProvider>

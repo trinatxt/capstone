@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,34 +10,9 @@ import {
 } from "react-native";
 import { SignCardModal, SendMessageModal, ReceivedCardsModal } from "../components/BirthdayModals";
 import { useUser } from "../context/UserContext";
+import { API_URL } from "../api/apiClient";
 
 const screenWidth = Dimensions.get("window").width;
-
-const bookings = [
-  {
-    id: "1",
-    title: "Delta Pod 2",
-    location: "Floor 4, Office 2",
-    time: "Oct 15, 12:00 - 12:30 PM",
-    people: 4,
-    image: require("../images/office.png"),
-  },
-  {
-    id: "2",
-    title: "Delta Pod 5",
-    location: "Floor 5, Office 1",
-    time: "Oct 16, 14:00 - 14:30 PM",
-    people: 3,
-    image: require("../images/office.png"),
-  },
-];
-
-const colleagues = [
-  { id: "1", name: "Jane", mode: "Meeting Mode" },
-  { id: "2", name: "Anna", mode: "Relax Mode" },
-  { id: "3", name: "Simin", mode: "Reading Mode" },
-  { id: "4", name: "Trina", mode: "Meeting Mode" },
-];
 
 const knockers = [
   { id: "k1", name: "Alex" },
@@ -48,7 +23,24 @@ const knockers = [
 export default function HomePage({ navigation }: any) {
   const { user } = useUser();
   const carouselRef = useRef(null);
+  const [colleagues, setColleagues] = useState<{ id: string; name: string; mode: string }[]>([]);
   const [signCardVisible, setSignCardVisible] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/users`)
+      .then((r) => r.json())
+      .then((data: { id: number; username: string; full_name: string | null; preferred_modes: string | null }[]) => {
+        const others = data
+          .filter((u) => u.id !== user?.id)
+          .map((u) => ({
+            id: String(u.id),
+            name: u.full_name || u.username,
+            mode: u.preferred_modes || "Available",
+          }));
+        setColleagues(others);
+      })
+      .catch(() => {});
+  }, [user?.id]);
   const [sendMessageVisible, setSendMessageVisible] = useState(false);
   const [myBirthdayVisible, setMyBirthdayVisible] = useState(false);
   const [knockedIds, setKnockedIds] = useState<Set<string>>(new Set());

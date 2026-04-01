@@ -3,10 +3,7 @@ const express = require("express");
 const { Pool } = require("pg");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
-const {
-  IoTDataPlaneClient,
-  PublishCommand,
-} = require("@aws-sdk/client-iot-data-plane");
+const https = require("https");
 
 const app = express();
 app.use(cors());
@@ -18,20 +15,47 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// ==================== AWS IoT Connection ====================
-const iotClient = new IoTDataPlaneClient({
-  region: process.env.AWS_REGION,
-  endpoint: `https://${process.env.AWS_IOT_DATA_ENDPOINT}`,
+// ==================== AWS IoT Connection (cert-based HTTPS) ====================
+const iotAgent = new https.Agent({
+  cert: process.env.AWS_IOT_CERT,
+  key: process.env.AWS_IOT_PRIVATE_KEY,
+  ca: process.env.AWS_IOT_ROOT_CA,
 });
 
-async function publishToIoT(topic, payload, qos = 0) {
-  const command = new PublishCommand({
-    topic,
-    qos,
-    payload: Buffer.from(JSON.stringify(payload)),
-  });
+async function publishToIoT(topic, payload) {
+  const body = JSON.stringify(payload);
+  const endpoint = process.env.AWS_IOT_DATA_ENDPOINT;
+  const path = `/topics/${encodeURIComponent(topic)}?qos=0`;
 
-  await iotClient.send(command);
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: endpoint,
+        port: 8443,
+        path,
+        method: "POST",
+        agent: iotAgent,
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => { data += chunk; });
+        res.on("end", () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(data);
+          } else {
+            reject(new Error(`IoT publish failed: ${res.statusCode} ${data}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
 }
 
 // ==================== DB Init ====================
@@ -199,6 +223,67 @@ app.put("/api/users/:id", async (req, res) => {
       success: true,
       user: { ...row, preferred_modes: fromModeArray(row.preferred_modes) },
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Change password
+app.put("/api/users/:id/password", async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: "current_password and new_password are required" });
+  }
+  if (new_password.length < 6) {
+    return res.status(400).json({ error: "New password must be at least 6 characters" });
+  }
+  try {
+    const result = await pool.query("SELECT * FROM users WHERE id = $1", [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
+
+    const user = result.rows[0];
+    const match = await bcrypt.compare(current_password, user.password_hash);
+    if (!match) return res.status(401).json({ error: "Current password is incorrect" });
+
+    const new_hash = await bcrypt.hash(new_password, 10);
+    await pool.query("UPDATE users SET password_hash = $1 WHERE id = $2", [new_hash, req.params.id]);
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete account
+app.delete("/api/users/:id", async (req, res) => {
+  try {
+    // Remove bookings first (FK constraint)
+    await pool.query("DELETE FROM bookings WHERE user_id = $1", [req.params.id]);
+    const result = await pool.query("DELETE FROM users WHERE id = $1 RETURNING id", [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    res.json({ success: true, message: "Account deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get active sessions (returns current user's login info — single session model)
+app.get("/api/users/:id/sessions", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, username, full_name, created_at FROM users WHERE id = $1",
+      [req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
+    const user = result.rows[0];
+    res.json([
+      {
+        id: "current",
+        device: "Mobile App",
+        location: "Current session",
+        logged_in_at: new Date().toISOString(),
+        is_current: true,
+      },
+    ]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -465,7 +550,12 @@ app.post("/api/pods/:id/sync-command", async (req, res) => {
     const topic = `pods/${targetPodId}/commands`;
     const payload = {};
 
-    if (fan_speed !== undefined) payload.fan_speed = Number(fan_speed);
+    if (fan_speed !== undefined) {
+      const speed = Number(fan_speed);
+      payload.fan_speed = Number.isFinite(speed)
+        ? Math.max(1, Math.min(5, speed))
+        : 1;
+    }
     if (brightness !== undefined) payload.brightness = Number(brightness);
     if (theme_id !== undefined) payload.theme_id = theme_id;
     if (unlock !== undefined) payload.unlock = Boolean(unlock);

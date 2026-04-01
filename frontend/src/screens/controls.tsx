@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -9,33 +9,14 @@ import {
   Image,
 } from "react-native";
 import Slider from "@react-native-community/slider";
+import { API_URL } from "../api/apiClient";
 
-// ---- ESP32 IP ----
-const ESP32_IP = "http://172.20.10.2";
+const POD_ID = "delta-pod-1";
 
-// ---- Send LED + Fan updates ----
-const sendControlUpdate = async (lightOn, brightness, fanSpeed) => {
-  const ledPWM = lightOn ? Math.round((brightness / 100) * 255) : 0;
-
-  const fanMap = {
-    1: 60,
-    2: 100,
-    3: 150,
-    4: 200,
-    5: 255,
-  };
-
-  const fanPWM = fanMap[fanSpeed] || 0;
-
-  try {
-    await fetch(`${ESP32_IP}/control`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `led1=${ledPWM}&fan=${fanPWM}`,
-    });
-  } catch (err) {
-    console.warn("ESP32 unreachable", err);
-  }
+const modeToTheme: Record<string, string> = {
+  Meeting:    "presentation",
+  Reading:    "focus",
+  Relaxation: "relax",
 };
 
 const modeConfig = [
@@ -49,10 +30,32 @@ export default function Controls({ navigation }: any) {
   const [brightness, setBrightness] = useState(50);
   const [fanSpeed, setFanSpeed] = useState(3);
   const [mode, setMode] = useState("Meeting");
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    sendControlUpdate(unlocked, brightness, fanSpeed);
-  }, [unlocked, brightness, fanSpeed]);
+  const sendCommand = (opts: { brightness?: number; fanSpeed?: number; mode?: string }) => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(async () => {
+      const brightnessVal = opts.brightness ?? brightness;
+      const fanVal = opts.fanSpeed ?? fanSpeed;
+      const modeVal = opts.mode ?? mode;
+
+      const payload: Record<string, any> = {
+        fan_speed: fanVal,
+        brightness: Math.round((brightnessVal / 100) * 255),
+        theme_id: modeToTheme[modeVal] ?? "focus",
+      };
+
+      try {
+        await fetch(`${API_URL}/api/pods/${POD_ID}/sync-command`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        console.warn("Backend unreachable", err);
+      }
+    }, 300);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -99,7 +102,7 @@ export default function Controls({ navigation }: any) {
           {modeConfig.map((m) => (
             <Pressable
               key={m.label}
-              onPress={() => setMode(m.label)}
+              onPress={() => { setMode(m.label); sendCommand({ mode: m.label }); }}
               style={[styles.modeCard, mode === m.label && styles.modeCardActive]}
             >
               <View style={[styles.modeCircle, { backgroundColor: m.color }]} />
@@ -118,7 +121,7 @@ export default function Controls({ navigation }: any) {
             maximumValue={100}
             step={1}
             value={brightness}
-            onValueChange={setBrightness}
+            onValueChange={(v) => { setBrightness(v); sendCommand({ brightness: v }); }}
             minimumTrackTintColor="#F5C518"
             maximumTrackTintColor="#e0e0e0"
             thumbTintColor="#F5C518"
@@ -130,11 +133,11 @@ export default function Controls({ navigation }: any) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>💨 Fan Speed</Text>
           <View style={styles.fanRow}>
-            <Pressable onPress={() => setFanSpeed(Math.max(1, fanSpeed - 1))}>
+            <Pressable onPress={() => { const v = Math.max(1, fanSpeed - 1); setFanSpeed(v); sendCommand({ fanSpeed: v }); }}>
               <Text style={styles.fanBtn}>−</Text>
             </Pressable>
             <Text style={styles.fanValue}>{fanSpeed}</Text>
-            <Pressable onPress={() => setFanSpeed(Math.min(5, fanSpeed + 1))}>
+            <Pressable onPress={() => { const v = Math.min(5, fanSpeed + 1); setFanSpeed(v); sendCommand({ fanSpeed: v }); }}>
               <Text style={styles.fanBtn}>+</Text>
             </Pressable>
           </View>

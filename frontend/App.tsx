@@ -40,6 +40,10 @@ import ViewBookings from "./src/screens/ViewBookings";
 import Wifi from "./src/screens/wifi";
 import Settings from "./src/screens/settings";
 import ProfileSettings from "./src/screens/ProfileSettings";
+import PrivacySecurity from "./src/screens/PrivacySecurity";
+import HelpSupport from "./src/screens/HelpSupport";
+import ChangePassword from "./src/screens/ChangePassword";
+import ActiveSessions from "./src/screens/ActiveSessions";
 
 const Stack = createNativeStackNavigator();
 
@@ -64,6 +68,10 @@ export default function App() {
           options={{ animation: "slide_from_left" }}
         />
         <Stack.Screen name="ProfileSettings" component={ProfileSettings} />
+        <Stack.Screen name="PrivacySecurity" component={PrivacySecurity} />
+        <Stack.Screen name="HelpSupport" component={HelpSupport} />
+        <Stack.Screen name="ChangePassword" component={ChangePassword} />
+        <Stack.Screen name="ActiveSessions" component={ActiveSessions} />
       </Stack.Navigator>
     </NavigationContainer>
     </UserProvider>

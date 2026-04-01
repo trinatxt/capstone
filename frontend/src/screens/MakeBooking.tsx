@@ -7,8 +7,12 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useUser } from "../context/UserContext";
+import { API_URL } from "../api/apiClient";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -65,7 +69,37 @@ const modes = [
 ];
 
 export default function MakeBooking({ navigation }: any) {
+  const { user } = useUser();
   const [selectedMode, setSelectedMode] = useState("meeting");
+  const [bookingLoading, setBookingLoading] = useState<string | null>(null);
+
+  const handleBookNow = async (pod: typeof pods[0]) => {
+    if (!user?.id) return;
+    setBookingLoading(pod.id);
+    try {
+      const res = await fetch(`${API_URL}/api/bookings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.id,
+          pod_name: pod.name,
+          location: pod.location,
+          booking_date: new Date().toISOString().split("T")[0],
+          time_label: pod.time,
+          people_count: pod.people,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Booking failed");
+      Alert.alert("Booking confirmed!", `${pod.name} has been booked.`, [
+        { text: "OK", onPress: () => navigation.goBack() },
+      ]);
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setBookingLoading(null);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -141,8 +175,16 @@ export default function MakeBooking({ navigation }: any) {
               <Ionicons name="people-outline" size={13} color="#666" />
               <Text style={styles.podDetail}>{pod.people} pax</Text>
             </View>
-            <Pressable style={styles.bookBtn}>
-              <Text style={styles.bookBtnText}>Book Now</Text>
+            <Pressable
+              style={styles.bookBtn}
+              onPress={() => handleBookNow(pod)}
+              disabled={bookingLoading === pod.id}
+            >
+              {bookingLoading === pod.id ? (
+                <ActivityIndicator size="small" color="#065f46" />
+              ) : (
+                <Text style={styles.bookBtnText}>Book Now</Text>
+              )}
             </Pressable>
           </View>
         </View>

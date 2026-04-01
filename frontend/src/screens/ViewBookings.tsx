@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,48 +6,73 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useUser } from "../context/UserContext";
+import { API_URL } from "../api/apiClient";
+import { useFocusEffect } from "@react-navigation/native";
 
 type TabType = "Today" | "Upcoming" | "Cancelled";
 
-const allBookings: Record<TabType, any[]> = {
-  Today: [
-    {
-      id: "1",
-      title: "Delta Pod 2",
-      location: "Floor 4, Office 2",
-      time: "Oct 15, 12:00 - 12:30 PM",
-      people: 4,
-      image: require("../images/office.png"),
-    },
-  ],
-  Upcoming: [
-    {
-      id: "2",
-      title: "Delta Pod 5",
-      location: "Floor 5, Office 1",
-      time: "Oct 16, 14:00 - 14:30 PM",
-      people: 3,
-      image: require("../images/office.png"),
-    },
-    {
-      id: "3",
-      title: "Delta Pod 8",
-      location: "Floor 3, Office 3",
-      time: "Oct 17, 10:00 - 11:00 AM",
-      people: 5,
-      image: require("../images/office.png"),
-    },
-  ],
-  Cancelled: [],
+type Booking = {
+  id: string;
+  pod_name: string;
+  location: string;
+  time_label: string;
+  people_count: number;
+  status: string;
 };
 
 const TABS: TabType[] = ["Today", "Upcoming", "Cancelled"];
+const filterMap: Record<TabType, string> = {
+  Today: "today",
+  Upcoming: "upcoming",
+  Cancelled: "cancelled",
+};
 
 export default function ViewBookings({ navigation }: any) {
+  const { user } = useUser();
   const [activeTab, setActiveTab] = useState<TabType>("Today");
-  const bookings = allBookings[activeTab];
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchBookings = useCallback(async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/bookings?user_id=${user.id}&filter=${filterMap[activeTab]}`
+      );
+      const data = await res.json();
+      setBookings(Array.isArray(data) ? data.map((b: any) => ({ ...b, id: String(b.id) })) : []);
+    } catch {
+      setBookings([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, activeTab]);
+
+  useFocusEffect(useCallback(() => { fetchBookings(); }, [fetchBookings]));
+
+  const handleCancel = async (id: string) => {
+    Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
+      { text: "No" },
+      {
+        text: "Yes, cancel",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await fetch(`${API_URL}/api/bookings/${id}/cancel`, { method: "PUT" });
+            fetchBookings();
+          } catch {
+            Alert.alert("Error", "Could not cancel booking");
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -76,7 +101,9 @@ export default function ViewBookings({ navigation }: any) {
       </View>
 
       {/* Bookings list */}
-      {bookings.length === 0 ? (
+      {loading ? (
+        <ActivityIndicator size="large" color="#056af7" style={{ marginTop: 60 }} />
+      ) : bookings.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="calendar-outline" size={52} color="#ccc" />
           <Text style={styles.emptyText}>No {activeTab.toLowerCase()} bookings</Text>
@@ -84,23 +111,27 @@ export default function ViewBookings({ navigation }: any) {
       ) : (
         bookings.map((item) => (
           <View key={item.id} style={styles.bookingCard}>
-            <Image source={item.image} style={styles.bookingImage} resizeMode="cover" />
+            <Image source={require("../images/office.png")} style={styles.bookingImage} resizeMode="cover" />
             <View style={styles.bookingBody}>
-              <Text style={styles.bookingTitle}>{item.title}</Text>
-              <View style={styles.detailRow}>
-                <Ionicons name="location-outline" size={13} color="#666" />
-                <Text style={styles.detailText}>{item.location}</Text>
-              </View>
-              <View style={styles.detailRow}>
-                <Ionicons name="time-outline" size={13} color="#666" />
-                <Text style={styles.detailText}>{item.time}</Text>
-              </View>
+              <Text style={styles.bookingTitle}>{item.pod_name}</Text>
+              {item.location ? (
+                <View style={styles.detailRow}>
+                  <Ionicons name="location-outline" size={13} color="#666" />
+                  <Text style={styles.detailText}>{item.location}</Text>
+                </View>
+              ) : null}
+              {item.time_label ? (
+                <View style={styles.detailRow}>
+                  <Ionicons name="time-outline" size={13} color="#666" />
+                  <Text style={styles.detailText}>{item.time_label}</Text>
+                </View>
+              ) : null}
               <View style={styles.detailRow}>
                 <Ionicons name="people-outline" size={13} color="#666" />
-                <Text style={styles.detailText}>{item.people} people</Text>
+                <Text style={styles.detailText}>{item.people_count} people</Text>
               </View>
               {activeTab !== "Cancelled" && (
-                <Pressable style={styles.cancelBtn}>
+                <Pressable style={styles.cancelBtn} onPress={() => handleCancel(item.id)}>
                   <Text style={styles.cancelBtnText}>Cancel Booking</Text>
                 </Pressable>
               )}

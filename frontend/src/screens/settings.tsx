@@ -11,8 +11,8 @@ import {
 
 const menuItems = [
   { label: "Profile Settings", screen: "ProfileSettings" },
-  { label: "Privacy & Security", screen: null },
-  { label: "Help & Support", screen: null },
+  { label: "Privacy & Security", screen: "PrivacySecurity" },
+  { label: "Help & Support", screen: "HelpSupport" },
 ];
 
 export default function Settings({ navigation }: any) {

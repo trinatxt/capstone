@@ -295,7 +295,7 @@ app.put("/api/pods/:id/hardware", async (req, res) => {
     fan_speed = Number(fan_speed);
     if (!Number.isFinite(fan_speed)) fan_speed = 3;
 
-    fan_speed = Math.max(3, Math.min(5, fan_speed));
+    fan_speed = Math.max(1, Math.min(5, fan_speed));
 
     const result = await pool.query(
       `
@@ -406,7 +406,12 @@ app.post("/api/pods/:id/sync-command", async (req, res) => {
     const topic = `pods/${targetPodId}/commands`;
     const payload = {};
 
-    if (fan_speed !== undefined) payload.fan_speed = Number(fan_speed);
+    if (fan_speed !== undefined) {
+      const speed = Number(fan_speed);
+      payload.fan_speed = Number.isFinite(speed)
+        ? Math.max(1, Math.min(5, speed))
+        : 1;
+    }
     if (brightness !== undefined) payload.brightness = Number(brightness);
     if (theme_id !== undefined) payload.theme_id = theme_id;
     if (unlock !== undefined) payload.unlock = Boolean(unlock);

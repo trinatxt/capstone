@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import { useUser } from "../context/UserContext";
 import {
   View,
@@ -12,7 +12,16 @@ import {
   NativeScrollEvent,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { useFocusEffect } from "@react-navigation/native";
 import { API_URL } from "../api/apiClient";
+
+function getLocalDateISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -29,23 +38,25 @@ export default function OfficeHomePage({ navigation }: any) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [bookings, setBookings] = useState<Booking[]>([]);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    fetch(`${API_URL}/api/bookings?user_id=${user.id}`)
-      .then((r) => r.json())
-      .then((data: any[]) => {
-        setBookings(
-          data.map((b) => ({
-            id: String(b.id),
-            title: b.pod_name,
-            location: b.location || "",
-            time: b.time_label || "",
-            people: b.people_count || 1,
-          }))
-        );
-      })
-      .catch(() => {});
-  }, [user?.id]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      fetch(`${API_URL}/api/bookings?user_id=${user.id}&date=${getLocalDateISO()}`)
+        .then((r) => r.json())
+        .then((data: any[]) => {
+          setBookings(
+            data.map((b) => ({
+              id: String(b.id),
+              title: b.pod_name,
+              location: b.location || "",
+              time: b.time_label || "",
+              people: b.people_count || 1,
+            }))
+          );
+        })
+        .catch(() => {});
+    }, [user?.id])
+  );
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
@@ -69,51 +80,60 @@ export default function OfficeHomePage({ navigation }: any) {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>UPCOMING BOOKINGS</Text>
         <View style={styles.todayBadge}>
-          <Text style={styles.todayText}>Today</Text>
+          <Text style={styles.todayText}>Upcoming</Text>
         </View>
       </View>
 
       {/* Booking Carousel */}
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {bookings.map((item) => (
-          <View key={item.id} style={styles.slideWrapper}>
-            <View style={styles.bookingCard}>
-              <Image source={item.image} style={styles.bookingImage} resizeMode="cover" />
-              <View style={styles.bookingBody}>
-                <Text style={styles.bookingTitle}>{item.title}</Text>
-                <View style={styles.detailRow}>
-                  <Ionicons name="location-outline" size={14} color="#666" />
-                  <Text style={styles.detailText}>{item.location}</Text>
+      {bookings.length === 0 ? (
+        <View style={styles.emptyCarousel}>
+          <Ionicons name="calendar-outline" size={40} color="#ccc" />
+          <Text style={styles.emptyCarouselText}>No active bookings</Text>
+        </View>
+      ) : (
+        <>
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+          >
+            {bookings.map((item) => (
+              <View key={item.id} style={styles.slideWrapper}>
+                <View style={styles.bookingCard}>
+                  <Image source={require("../images/office.png")} style={styles.bookingImage} resizeMode="cover" />
+                  <View style={styles.bookingBody}>
+                    <Text style={styles.bookingTitle}>{item.title}</Text>
+                    <View style={styles.detailRow}>
+                      <Ionicons name="location-outline" size={14} color="#666" />
+                      <Text style={styles.detailText}>{item.location}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Ionicons name="time-outline" size={14} color="#666" />
+                      <Text style={styles.detailText}>{item.time}</Text>
+                    </View>
+                    <View style={styles.detailRow}>
+                      <Ionicons name="people-outline" size={14} color="#666" />
+                      <Text style={styles.detailText}>{item.people} people</Text>
+                    </View>
+                    <Pressable style={styles.checkInBtn}>
+                      <Text style={styles.checkInText}>Check in</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={styles.detailRow}>
-                  <Ionicons name="time-outline" size={14} color="#666" />
-                  <Text style={styles.detailText}>{item.time}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Ionicons name="people-outline" size={14} color="#666" />
-                  <Text style={styles.detailText}>{item.people} people</Text>
-                </View>
-                <Pressable style={styles.checkInBtn}>
-                  <Text style={styles.checkInText}>Check in</Text>
-                </Pressable>
               </View>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+            ))}
+          </ScrollView>
 
-      {/* Dot Indicators */}
-      <View style={styles.dotsRow}>
-        {bookings.map((_, i) => (
-          <View key={i} style={[styles.dot, i === activeIndex && styles.dotActive]} />
-        ))}
-      </View>
+          {/* Dot Indicators */}
+          <View style={styles.dotsRow}>
+            {bookings.map((_, i) => (
+              <View key={i} style={[styles.dot, i === activeIndex && styles.dotActive]} />
+            ))}
+          </View>
+        </>
+      )}
 
       {/* Services */}
       <Text style={styles.servicesLabel}>Services</Text>
@@ -279,5 +299,15 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#333",
     textAlign: "center",
+  },
+  emptyCarousel: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    gap: 10,
+  },
+  emptyCarouselText: {
+    fontSize: 14,
+    color: "#aaa",
   },
 });

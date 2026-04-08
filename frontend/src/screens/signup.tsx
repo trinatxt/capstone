@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useUser } from "../context/UserContext";
 import {
   View,
   Text,
@@ -14,6 +15,7 @@ import {
 import { API_URL } from "../api/apiClient";
 
 export default function SignUp({ navigation }: any) {
+  const { setUser } = useUser();
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -41,6 +43,7 @@ export default function SignUp({ navigation }: any) {
       if (!res.ok) {
         setError(data.error || "Sign up failed.");
       } else {
+        setUser(data.user);
         navigation.navigate("GetStarted");
       }
     } catch {

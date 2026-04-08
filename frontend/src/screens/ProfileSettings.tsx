@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useUser } from "../context/UserContext";
 import {
   View,
@@ -11,7 +11,10 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Platform,
+  Modal,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { API_URL } from "../api/apiClient";
 
 const PREFERRED_MODES = ["Meeting Mode", "Reading Mode", "Relaxation Mode"];
@@ -23,11 +26,41 @@ export default function ProfileSettings({ navigation }: any) {
   const [birthday, setBirthday] = useState(user?.birthday || "");
   const [preferredMode, setPreferredMode] = useState(user?.preferred_modes || "");
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Sync fields if user context changes (e.g. after save or re-login)
+  useEffect(() => {
+    setFullName(user?.full_name || "");
+    setBirthday(user?.birthday || "");
+    setPreferredMode(user?.preferred_modes || "");
+  }, [user]);
+
+  const birthdayDate = (() => {
+    if (!birthday) return new Date(2000, 0, 1);
+    const parts = birthday.split("T")[0].split("-");
+    if (parts.length < 3) return new Date(2000, 0, 1);
+    // Use local time constructor to avoid UTC midnight timezone shift
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  })();
+
+  const onDateChange = (_: any, selected?: Date) => {
+    setShowDatePicker(Platform.OS === "ios");
+    if (selected) {
+      const y = selected.getFullYear();
+      const m = String(selected.getMonth() + 1).padStart(2, "0");
+      const d = String(selected.getDate()).padStart(2, "0");
+      setBirthday(`${y}-${m}-${d}`);
+    }
+  };
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user?.id) {
+      Alert.alert("Error", "You are not logged in. Please sign in again.");
+      return;
+    }
     setLoading(true);
     try {
+      console.log("Saving profile for user:", user.id, { fullName, birthday });
       const res = await fetch(`${API_URL}/api/users/${user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -42,6 +75,9 @@ export default function ProfileSettings({ navigation }: any) {
         Alert.alert("Error", data.error || "Failed to save.");
       } else {
         setUser(data.user);
+        setFullName(data.user.full_name || "");
+        setBirthday(data.user.birthday || "");
+        setPreferredMode(data.user.preferred_modes || "");
         Alert.alert("Saved", "Profile updated successfully.");
         navigation.goBack();
       }
@@ -66,7 +102,9 @@ export default function ProfileSettings({ navigation }: any) {
         {/* Avatar */}
         <View style={styles.avatarSection}>
           <Image source={require("../images/avatar.png")} style={styles.avatar} />
-          <Text style={styles.username}>@{user?.username}</Text>
+          <Text style={styles.username}>
+            {user?.username ? `@${user.username}` : user?.full_name || "No username"}
+          </Text>
         </View>
 
         {/* Fields */}
@@ -83,13 +121,31 @@ export default function ProfileSettings({ navigation }: any) {
 
         <View style={styles.section}>
           <Text style={styles.label}>Birthday</Text>
-          <TextInput
-            style={styles.input}
-            value={birthday}
-            onChangeText={setBirthday}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#aaa"
-          />
+          <Pressable style={styles.input} onPress={() => setShowDatePicker(true)}>
+            <Text style={{ fontSize: 16, color: birthday ? "#111" : "#aaa" }}>
+              {birthday || "Select your birthday"}
+            </Text>
+          </Pressable>
+          {showDatePicker && (
+            <Modal transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+              <Pressable style={styles.pickerOverlay} onPress={() => setShowDatePicker(false)}>
+                <View style={styles.pickerCard}>
+                  <Text style={styles.pickerTitle}>Select Birthday</Text>
+                  <DateTimePicker
+                    value={birthdayDate}
+                    mode="date"
+                    display="spinner"
+                    maximumDate={new Date()}
+                    onChange={onDateChange}
+                    style={{ width: "100%" }}
+                  />
+                  <Pressable style={styles.pickerDone} onPress={() => setShowDatePicker(false)}>
+                    <Text style={styles.pickerDoneText}>Done</Text>
+                  </Pressable>
+                </View>
+              </Pressable>
+            </Modal>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -229,5 +285,37 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 17,
     fontWeight: "bold",
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  pickerCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    width: "100%",
+    alignItems: "center",
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111",
+    marginBottom: 8,
+  },
+  pickerDone: {
+    marginTop: 12,
+    backgroundColor: "#056af7",
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 24,
+  },
+  pickerDoneText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
   },
 });

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Slider from "@react-native-community/slider";
 import { API_URL } from "../api/apiClient";
+import { useUser } from "../context/UserContext";
 
 const POD_ID = "delta-pod-1";
 
@@ -26,11 +27,29 @@ const modeConfig = [
 ];
 
 export default function Controls({ navigation }: any) {
+  const { user } = useUser();
   const [unlocked, setUnlocked] = useState(true);
   const [brightness, setBrightness] = useState(50);
   const [fanSpeed, setFanSpeed] = useState(3);
   const [mode, setMode] = useState("Meeting");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveUserMode = async (selectedMode: string) => {
+    if (!user?.id) return;
+    try {
+      await fetch(`${API_URL}/api/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: user.full_name,
+          birthday: user.birthday,
+          preferred_modes: selectedMode,
+        }),
+      });
+    } catch (err) {
+      console.warn("Failed to save mode", err);
+    }
+  };
 
   const sendCommand = (opts: { brightness?: number; fanSpeed?: number; mode?: string }) => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -102,7 +121,7 @@ export default function Controls({ navigation }: any) {
           {modeConfig.map((m) => (
             <Pressable
               key={m.label}
-              onPress={() => { setMode(m.label); sendCommand({ mode: m.label }); }}
+              onPress={() => { setMode(m.label); sendCommand({ mode: m.label }); saveUserMode(m.label); }}
               style={[styles.modeCard, mode === m.label && styles.modeCardActive]}
             >
               <View style={[styles.modeCircle, { backgroundColor: m.color }]} />

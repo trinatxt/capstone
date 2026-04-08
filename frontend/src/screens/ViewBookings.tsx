@@ -7,29 +7,36 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { useUser } from "../context/UserContext";
 import { API_URL } from "../api/apiClient";
 import { useFocusEffect } from "@react-navigation/native";
 
-type TabType = "Today" | "Upcoming" | "Cancelled";
+type TabType = "Today" | "Upcoming";
 
 type Booking = {
   id: string;
   pod_name: string;
   location: string;
+  booking_date: string;
   time_label: string;
   people_count: number;
   status: string;
 };
 
-const TABS: TabType[] = ["Today", "Upcoming", "Cancelled"];
+function getLocalDateISO() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const TABS: TabType[] = ["Today", "Upcoming"];
 const filterMap: Record<TabType, string> = {
   Today: "today",
   Upcoming: "upcoming",
-  Cancelled: "cancelled",
 };
 
 export default function ViewBookings({ navigation }: any) {
@@ -43,7 +50,7 @@ export default function ViewBookings({ navigation }: any) {
     setLoading(true);
     try {
       const res = await fetch(
-        `${API_URL}/api/bookings?user_id=${user.id}&filter=${filterMap[activeTab]}`
+        `${API_URL}/api/bookings?user_id=${user.id}&filter=${filterMap[activeTab]}&date=${getLocalDateISO()}`
       );
       const data = await res.json();
       setBookings(Array.isArray(data) ? data.map((b: any) => ({ ...b, id: String(b.id) })) : []);
@@ -56,23 +63,6 @@ export default function ViewBookings({ navigation }: any) {
 
   useFocusEffect(useCallback(() => { fetchBookings(); }, [fetchBookings]));
 
-  const handleCancel = async (id: string) => {
-    Alert.alert("Cancel Booking", "Are you sure you want to cancel this booking?", [
-      { text: "No" },
-      {
-        text: "Yes, cancel",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await fetch(`${API_URL}/api/bookings/${id}/cancel`, { method: "PUT" });
-            fetchBookings();
-          } catch {
-            Alert.alert("Error", "Could not cancel booking");
-          }
-        },
-      },
-    ]);
-  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -120,6 +110,14 @@ export default function ViewBookings({ navigation }: any) {
                   <Text style={styles.detailText}>{item.location}</Text>
                 </View>
               ) : null}
+              {item.booking_date ? (
+                <View style={styles.detailRow}>
+                  <Ionicons name="calendar-outline" size={13} color="#666" />
+                  <Text style={styles.detailText}>
+                    {new Date(item.booking_date).toLocaleDateString("en-SG", { month: "short", day: "numeric", year: "numeric" })}
+                  </Text>
+                </View>
+              ) : null}
               {item.time_label ? (
                 <View style={styles.detailRow}>
                   <Ionicons name="time-outline" size={13} color="#666" />
@@ -130,11 +128,6 @@ export default function ViewBookings({ navigation }: any) {
                 <Ionicons name="people-outline" size={13} color="#666" />
                 <Text style={styles.detailText}>{item.people_count} people</Text>
               </View>
-              {activeTab !== "Cancelled" && (
-                <Pressable style={styles.cancelBtn} onPress={() => handleCancel(item.id)}>
-                  <Text style={styles.cancelBtnText}>Cancel Booking</Text>
-                </Pressable>
-              )}
             </View>
           </View>
         ))
@@ -240,17 +233,5 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 13,
     color: "#555",
-  },
-  cancelBtn: {
-    marginTop: 10,
-    backgroundColor: "#FEE2E2",
-    paddingVertical: 11,
-    borderRadius: 24,
-    alignItems: "center",
-  },
-  cancelBtnText: {
-    color: "#EF4444",
-    fontWeight: "bold",
-    fontSize: 14,
   },
 });

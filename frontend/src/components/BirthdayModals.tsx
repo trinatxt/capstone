@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Image,
   Animated,
 } from "react-native";
+import { API_URL } from "../api/apiClient";
 
 // ── Card designs ──────────────────────────────────────────────────────────────
 const CARD_DESIGNS = [
@@ -122,14 +123,19 @@ function CardPreview({
 }
 
 // ── Sign Card Modal ───────────────────────────────────────────────────────────
+
 export function SignCardModal({
   visible,
   onClose,
   recipientName,
+  fromUserId,
+  toUserId,
 }: {
   visible: boolean;
   onClose: () => void;
   recipientName: string;
+  fromUserId?: string;
+  toUserId?: string;
 }) {
   const [step, setStep] = useState<"pick" | "sign">("pick");
   const [selectedId, setSelectedId] = useState("1");
@@ -146,7 +152,21 @@ export function SignCardModal({
     onClose();
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
+    if (fromUserId && toUserId) {
+      try {
+        await fetch(`${API_URL}/api/birthday-cards`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from_user_id: fromUserId,
+            to_user_id: toUserId,
+            card_design: selectedId,
+            message,
+          }),
+        });
+      } catch {}
+    }
     setSent(true);
     setTimeout(handleClose, 1800);
   };
@@ -414,40 +434,45 @@ export function SendMessageModal({
 }
 
 // ── Received Cards Modal (my birthday) ───────────────────────────────────────
-const RECEIVED_CARDS = [
-  {
-    id: "r1",
-    from: "Jane",
-    initial: "J",
-    cardId: "1",
-    message: "Wishing you the happiest of birthdays! You deserve all the joy today. 🎉",
-  },
-  {
-    id: "r2",
-    from: "Anna",
-    initial: "A",
-    cardId: "4",
-    message: "Happy Birthday Lee! Hope your day is as wonderful as you are! ⭐",
-  },
-  {
-    id: "r3",
-    from: "Simin",
-    initial: "S",
-    cardId: "2",
-    message: "Many happy returns! So glad to have you on the team 🎈",
-  },
-];
+type ReceivedCard = { id: string; from: string; initial: string; cardId: string; message: string };
 
 export function ReceivedCardsModal({
   visible,
   onClose,
+  cards,
 }: {
   visible: boolean;
   onClose: () => void;
+  cards: ReceivedCard[];
 }) {
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const current = RECEIVED_CARDS[selectedIdx];
-  const currentCard = CARD_DESIGNS.find((c) => c.id === current.cardId)!;
+
+  useEffect(() => { setSelectedIdx(0); }, [cards]);
+
+  if (cards.length === 0) {
+    return (
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.backBtn} />
+              <Text style={styles.sheetTitle}>Your Birthday Cards 🎂</Text>
+              <Pressable onPress={onClose} style={styles.closeBtn}>
+                <Text style={styles.closeX}>✕</Text>
+              </Pressable>
+            </View>
+            <View style={{ alignItems: "center", paddingVertical: 40, gap: 12 }}>
+              <Text style={{ fontSize: 48 }}>🎂</Text>
+              <Text style={{ fontSize: 15, color: "#888" }}>No cards yet — check back later!</Text>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  const current = cards[selectedIdx] ?? cards[0];
+  const currentCard = CARD_DESIGNS.find((c) => c.id === current.cardId) ?? CARD_DESIGNS[0];
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -468,7 +493,7 @@ export function ReceivedCardsModal({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={rcStyles.tabRow}
           >
-            {RECEIVED_CARDS.map((r, i) => (
+            {cards.map((r, i) => (
               <Pressable
                 key={r.id}
                 onPress={() => setSelectedIdx(i)}
@@ -507,7 +532,7 @@ export function ReceivedCardsModal({
 
           {/* Navigation dots */}
           <View style={rcStyles.dotsRow}>
-            {RECEIVED_CARDS.map((_, i) => (
+            {cards.map((_, i) => (
               <Pressable key={i} onPress={() => setSelectedIdx(i)}>
                 <View
                   style={[

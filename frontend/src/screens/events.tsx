@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SignCardModal, SendMessageModal } from "../components/BirthdayModals";
 import {
   View,
@@ -12,6 +12,26 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { useUser } from "../context/UserContext";
+import { API_URL } from "../api/apiClient";
+
+type BirthdayUser = { id: string; username: string; full_name: string | null };
+
+function isTodayBirthday(birthday: string | null | undefined): boolean {
+  if (!birthday) return false;
+  try {
+    const datePart = birthday.split("T")[0];
+    const parts = datePart.split("-");
+    if (parts.length < 3) return false;
+    const bdMonth = parseInt(parts[1], 10) - 1;
+    const bdDay = parseInt(parts[2], 10);
+    const today = new Date();
+    return bdMonth === today.getMonth() && bdDay === today.getDate();
+  } catch {
+    return false;
+  }
+}
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -22,8 +42,13 @@ const initialEvents = [
 ];
 
 export default function Events({ navigation }: any) {
+  const { user } = useUser();
   const [events, setEvents] = useState(initialEvents);
   const [modalVisible, setModalVisible] = useState(false);
+  const [todayBirthdays, setTodayBirthdays] = useState<BirthdayUser[]>([]);
+  const [selectedBirthdayPerson, setSelectedBirthdayPerson] = useState<BirthdayUser | null>(null);
+
+  const isMyBirthday = isTodayBirthday(user?.birthday);
 
   // Form state
   const [newTitle, setNewTitle]       = useState("");
@@ -36,6 +61,27 @@ export default function Events({ navigation }: any) {
   const [rsvpIds, setRsvpIds]         = useState<Set<string>>(new Set());
   const [signCardVisible, setSignCardVisible]       = useState(false);
   const [sendMessageVisible, setSendMessageVisible] = useState(false);
+  const [showEventDatePicker, setShowEventDatePicker] = useState(false);
+  const [eventDateObj, setEventDateObj] = useState(new Date());
+
+  const onEventDateChange = (_: any, selected?: Date) => {
+    setShowEventDatePicker(Platform.OS === "ios");
+    if (selected) {
+      setEventDateObj(selected);
+      const y = selected.getFullYear();
+      const m = String(selected.getMonth() + 1).padStart(2, "0");
+      const d = String(selected.getDate()).padStart(2, "0");
+      setMeetingDate(`${y}-${m}-${d}`);
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetch(`${API_URL}/api/birthdays/today?exclude_user_id=${user.id}`)
+      .then((r) => r.json())
+      .then((data: BirthdayUser[]) => setTodayBirthdays(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [user?.id]);
 
   const handleRsvp = (id: string) => setRsvpIds((prev) => new Set(prev).add(id));
 
@@ -77,31 +123,51 @@ export default function Events({ navigation }: any) {
           <Text style={styles.title}>Events</Text>
         </View>
 
-        {/* Birthday Card */}
-        <View style={styles.birthdayCard}>
-          <Text style={styles.birthdayEmoji}>🎂</Text>
-          <View style={styles.birthdayTextBlock}>
-            <Text style={styles.birthdayText}>{"Today is Andrew's\nBirthday!"}</Text>
-            <View style={styles.birthdayActions}>
-              <Pressable style={styles.birthdayButton} onPress={() => setSignCardVisible(true)}>
-                <Text style={styles.birthdayButtonText}>Sign Card</Text>
-              </Pressable>
-              <Pressable style={styles.birthdayButton} onPress={() => setSendMessageVisible(true)}>
-                <Text style={styles.birthdayButtonText}>Send Message</Text>
-              </Pressable>
+        {/* My Birthday Card */}
+        {isMyBirthday && (
+          <View style={[styles.birthdayCard, { backgroundColor: "#6B4EFF" }]}>
+            <Text style={styles.birthdayEmoji}>🎂</Text>
+            <View style={styles.birthdayTextBlock}>
+              <Text style={styles.birthdayText}>{`Happy Birthday,\n${user?.full_name || user?.username}! 🥳`}</Text>
+              <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 4 }}>
+                Your colleagues can sign your card on their homepage!
+              </Text>
             </View>
           </View>
-        </View>
+        )}
+
+        {/* Colleague Birthday Cards */}
+        {todayBirthdays.map((person) => {
+          const name = person.full_name || person.username;
+          return (
+            <View key={person.id} style={styles.birthdayCard}>
+              <Text style={styles.birthdayEmoji}>🎉</Text>
+              <View style={styles.birthdayTextBlock}>
+                <Text style={styles.birthdayText}>{`Today is\n${name}'s Birthday!`}</Text>
+                <View style={styles.birthdayActions}>
+                  <Pressable style={styles.birthdayButton} onPress={() => { setSelectedBirthdayPerson(person); setSignCardVisible(true); }}>
+                    <Text style={styles.birthdayButtonText}>Sign Card</Text>
+                  </Pressable>
+                  <Pressable style={styles.birthdayButton} onPress={() => { setSelectedBirthdayPerson(person); setSendMessageVisible(true); }}>
+                    <Text style={styles.birthdayButtonText}>Send Message</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          );
+        })}
 
         <SignCardModal
           visible={signCardVisible}
           onClose={() => setSignCardVisible(false)}
-          recipientName="Andrew"
+          recipientName={selectedBirthdayPerson ? (selectedBirthdayPerson.full_name || selectedBirthdayPerson.username) : ""}
+          fromUserId={user?.id}
+          toUserId={selectedBirthdayPerson?.id}
         />
         <SendMessageModal
           visible={sendMessageVisible}
           onClose={() => setSendMessageVisible(false)}
-          recipientName="Andrew"
+          recipientName={selectedBirthdayPerson ? (selectedBirthdayPerson.full_name || selectedBirthdayPerson.username) : ""}
         />
 
         {/* Tab row */}
@@ -196,13 +262,31 @@ export default function Events({ navigation }: any) {
                 </View>
 
                 <Text style={styles.fieldLabel}>Meeting date</Text>
-                <TextInput
-                  style={styles.inputField}
-                  placeholder="Choose date"
-                  placeholderTextColor="#aaa"
-                  value={meetingDate}
-                  onChangeText={setMeetingDate}
-                />
+                <Pressable style={styles.inputField} onPress={() => setShowEventDatePicker(true)}>
+                  <Text style={{ fontSize: 15, color: meetingDate ? "#222" : "#aaa" }}>
+                    {meetingDate || "Choose date"}
+                  </Text>
+                </Pressable>
+                {showEventDatePicker && (
+                  <Modal transparent animationType="fade" onRequestClose={() => setShowEventDatePicker(false)}>
+                    <Pressable style={styles.pickerOverlay} onPress={() => setShowEventDatePicker(false)}>
+                      <View style={styles.pickerCard}>
+                        <Text style={styles.pickerTitle}>Select Meeting Date</Text>
+                        <DateTimePicker
+                          value={eventDateObj}
+                          mode="date"
+                          display="spinner"
+                          minimumDate={new Date()}
+                          onChange={onEventDateChange}
+                          style={{ width: "100%" }}
+                        />
+                        <Pressable style={styles.pickerDone} onPress={() => setShowEventDatePicker(false)}>
+                          <Text style={styles.pickerDoneText}>Done</Text>
+                        </Pressable>
+                      </View>
+                    </Pressable>
+                  </Modal>
+                )}
 
                 <View style={styles.timeRow}>
                   <View style={styles.timeCol}>
@@ -680,6 +764,40 @@ const styles = StyleSheet.create({
   },
   dayPillTextActive: {
     color: "#fff",
+  },
+
+  /* Date picker */
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  pickerCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    width: "100%",
+    alignItems: "center",
+  },
+  pickerTitle: {
+    fontSize: 17,
+    fontWeight: "700" as const,
+    color: "#111",
+    marginBottom: 8,
+  },
+  pickerDone: {
+    marginTop: 12,
+    backgroundColor: "#E53935",
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 24,
+  },
+  pickerDoneText: {
+    color: "#fff",
+    fontWeight: "700" as const,
+    fontSize: 15,
   },
 
   /* Save */

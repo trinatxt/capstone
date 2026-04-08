@@ -58,19 +58,52 @@ async function publishToIoT(topic, payload) {
   });
 }
 
+// ==================== Helpers ====================
+function formatDate(val) {
+  if (!val) return null;
+  const d = new Date(val);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function toModeArray(val) {
+  if (!val) return null;
+  return Array.isArray(val) ? val : [val];
+}
+function fromModeArray(val) {
+  if (!val) return null;
+  return Array.isArray(val) ? (val[0] || null) : val;
+}
+
 // ==================== DB Init ====================
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS bookings (
       id           SERIAL PRIMARY KEY,
-      user_id      INTEGER REFERENCES users(id),
+      user_id      UUID REFERENCES users(id),
       pod_id       TEXT,
-      pod_name     TEXT NOT NULL,
+      pod_name     TEXT,
       location     TEXT,
-      booking_date DATE    NOT NULL DEFAULT CURRENT_DATE,
+      booking_date DATE    DEFAULT CURRENT_DATE,
       time_label   TEXT,
       people_count INTEGER DEFAULT 1,
       status       TEXT    DEFAULT 'active',
+      created_at   TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS birthday_cards (
+      id          SERIAL PRIMARY KEY,
+      from_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      to_user_id   UUID REFERENCES users(id) ON DELETE CASCADE,
+      card_design  TEXT DEFAULT '1',
+      message      TEXT,
+      created_at   TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS knocks (
+      id           SERIAL PRIMARY KEY,
+      from_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      to_user_id   UUID REFERENCES users(id) ON DELETE CASCADE,
+      dismissed    BOOLEAN DEFAULT FALSE,
       created_at   TIMESTAMP DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS events (
@@ -78,10 +111,46 @@ async function initDB() {
       title       TEXT NOT NULL,
       date_label  TEXT,
       icon        TEXT DEFAULT '📅',
-      created_by  INTEGER REFERENCES users(id),
+      created_by  UUID REFERENCES users(id),
       created_at  TIMESTAMP DEFAULT NOW()
     );
   `);
+  // Step 1 — add new columns if missing
+  const addCols = [
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pod_id       TEXT`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pod_name     TEXT`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS location     TEXT`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_date DATE DEFAULT CURRENT_DATE`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS time_label   TEXT`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS people_count INTEGER DEFAULT 1`,
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS status       TEXT DEFAULT 'active'`,
+  ];
+  for (const sql of addCols) {
+    await pool.query(sql).catch((err) => console.warn("Migration warn:", err.message));
+  }
+
+  // Step 2 — dynamically drop NOT NULL from ALL non-PK columns
+  // Handles any legacy schema (start_time, end_time, pin_code, etc.) without needing to know names
+  const legacyCols = await pool.query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name   = 'bookings'
+      AND is_nullable  = 'NO'
+      AND column_name  != 'id'
+  `);
+  for (const { column_name } of legacyCols.rows) {
+    await pool.query(`ALTER TABLE bookings ALTER COLUMN "${column_name}" DROP NOT NULL`)
+      .catch((err) => console.warn(`Drop NOT NULL ${column_name}:`, err.message));
+  }
+
+  // Step 3 — drop legacy FK on pod_id (old schema had pod_id REFERENCES pods(id))
+  await pool.query(`ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_pod_id_fkey`)
+    .catch((err) => console.warn("Drop FK warn:", err.message));
+
+  // Step 4 — ensure status column always defaults to 'active' regardless of old schema
+  await pool.query(`ALTER TABLE bookings ALTER COLUMN status SET DEFAULT 'active'`)
+    .catch((err) => console.warn("Status default warn:", err.message));
 }
 initDB().catch(console.error);
 
@@ -139,10 +208,11 @@ app.post("/api/signup", async (req, res) => {
       [username, password_hash, full_name || null, birthday || null, preferred_modes || null]
     );
 
+    const row = result.rows[0];
     res.status(201).json({
       success: true,
       message: "Account created successfully",
-      user: result.rows[0],
+      user: { ...row, birthday: formatDate(row.birthday), preferred_modes: fromModeArray(row.preferred_modes) },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -187,7 +257,7 @@ app.post("/api/login", async (req, res) => {
         id: user.id,
         username: user.username,
         full_name: user.full_name,
-        birthday: user.birthday,
+        birthday: formatDate(user.birthday),
         preferred_modes: fromModeArray(user.preferred_modes),
       },
     });
@@ -196,19 +266,10 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-// Normalize preferred_modes: DB stores TEXT[], frontend expects string | null
-function toModeArray(val) {
-  if (!val) return null;
-  return Array.isArray(val) ? val : [val];
-}
-function fromModeArray(val) {
-  if (!val) return null;
-  return Array.isArray(val) ? (val[0] || null) : val;
-}
-
 // Update user profile
 app.put("/api/users/:id", async (req, res) => {
   const { full_name, birthday, preferred_modes } = req.body;
+  console.log("PUT /api/users/:id", req.params.id, { full_name, birthday, preferred_modes });
   try {
     const result = await pool.query(
       `UPDATE users
@@ -221,7 +282,11 @@ app.put("/api/users/:id", async (req, res) => {
     const row = result.rows[0];
     res.json({
       success: true,
-      user: { ...row, preferred_modes: fromModeArray(row.preferred_modes) },
+      user: {
+        ...row,
+        birthday: row.birthday ? formatDate(row.birthday) : null,
+        preferred_modes: fromModeArray(row.preferred_modes),
+      },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -622,12 +687,124 @@ app.post("/api/pods/:id/push-state", async (req, res) => {
 });
 
 // =============================================================
+// ====================== BIRTHDAY CARDS ========================
+// =============================================================
+
+// GET /api/birthdays/today — users whose birthday is today (excluding self)
+app.get("/api/birthdays/today", async (req, res) => {
+  const { exclude_user_id } = req.query;
+  try {
+    const result = await pool.query(
+      `SELECT id, username, full_name
+       FROM users
+       WHERE birthday IS NOT NULL
+         AND to_char(birthday::date, 'MM-DD') = to_char(CURRENT_DATE, 'MM-DD')
+       ${exclude_user_id ? "AND id != $1" : ""}`,
+      exclude_user_id ? [exclude_user_id] : []
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/birthday-cards?to_user_id=X — cards received by a user
+app.get("/api/birthday-cards", async (req, res) => {
+  const { to_user_id } = req.query;
+  if (!to_user_id) return res.status(400).json({ error: "to_user_id is required" });
+  try {
+    const result = await pool.query(
+      `SELECT bc.id, bc.card_design, bc.message, bc.created_at,
+              u.id AS from_id, u.full_name AS from_full_name, u.username AS from_username
+       FROM birthday_cards bc
+       JOIN users u ON u.id = bc.from_user_id
+       WHERE bc.to_user_id = $1
+       ORDER BY bc.created_at DESC`,
+      [to_user_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/birthday-cards — send a card
+app.post("/api/birthday-cards", async (req, res) => {
+  const { from_user_id, to_user_id, card_design, message } = req.body;
+  if (!from_user_id || !to_user_id || !message) {
+    return res.status(400).json({ error: "from_user_id, to_user_id and message are required" });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO birthday_cards (from_user_id, to_user_id, card_design, message)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [from_user_id, to_user_id, card_design || "1", message]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================
+// ======================== KNOCKS ==============================
+// =============================================================
+
+// POST /api/knocks — send a knock from one user to another
+app.post("/api/knocks", async (req, res) => {
+  const { from_user_id, to_user_id } = req.body;
+  if (!from_user_id || !to_user_id) {
+    return res.status(400).json({ error: "from_user_id and to_user_id are required" });
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO knocks (from_user_id, to_user_id)
+       VALUES ($1, $2) RETURNING *`,
+      [from_user_id, to_user_id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/knocks?to_user_id=X — get undismissed knocks for a user
+app.get("/api/knocks", async (req, res) => {
+  const { to_user_id } = req.query;
+  if (!to_user_id) return res.status(400).json({ error: "to_user_id is required" });
+  try {
+    const result = await pool.query(
+      `SELECT k.id, k.created_at,
+              u.id AS from_id, u.full_name AS from_full_name, u.username AS from_username
+       FROM knocks k
+       JOIN users u ON u.id = k.from_user_id
+       WHERE k.to_user_id = $1 AND k.dismissed = FALSE
+       ORDER BY k.created_at DESC`,
+      [to_user_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/knocks/:id/dismiss — dismiss a knock
+app.put("/api/knocks/:id/dismiss", async (req, res) => {
+  try {
+    await pool.query("UPDATE knocks SET dismissed = TRUE WHERE id = $1", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================
 // ====================== BOOKINGS ==============================
 // =============================================================
 
-// GET /api/bookings?user_id=X&filter=today|upcoming|cancelled
+// GET /api/bookings?user_id=X&filter=today|upcoming|cancelled&date=YYYY-MM-DD
 app.get("/api/bookings", async (req, res) => {
-  const { user_id, filter } = req.query;
+  const { user_id, filter, date } = req.query;
   try {
     let whereClause = "WHERE 1=1";
     const params = [];
@@ -637,14 +814,21 @@ app.get("/api/bookings", async (req, res) => {
       whereClause += ` AND user_id = $${params.length}`;
     }
 
+    // Use client-supplied date to avoid server timezone mismatch
+    const localDate = date || new Date().toISOString().split("T")[0];
+
     if (filter === "today") {
-      whereClause += " AND booking_date = CURRENT_DATE AND status = 'active'";
+      params.push(localDate);
+      whereClause += ` AND booking_date = $${params.length} AND status = 'active'`;
     } else if (filter === "upcoming") {
-      whereClause += " AND booking_date > CURRENT_DATE AND status = 'active'";
+      params.push(localDate);
+      whereClause += ` AND booking_date > $${params.length} AND status = 'active'`;
     } else if (filter === "cancelled") {
       whereClause += " AND status = 'cancelled'";
     } else {
-      whereClause += " AND status = 'active'";
+      // Default (carousel): today + future active bookings only
+      params.push(localDate);
+      whereClause += ` AND booking_date >= $${params.length} AND status = 'active'`;
     }
 
     const result = await pool.query(
@@ -663,13 +847,29 @@ app.post("/api/bookings", async (req, res) => {
   if (!pod_name) return res.status(400).json({ error: "pod_name is required" });
   try {
     const result = await pool.query(
-      `INSERT INTO bookings (user_id, pod_id, pod_name, location, booking_date, time_label, people_count)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO bookings (user_id, pod_id, pod_name, location, booking_date, time_label, people_count, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
        RETURNING *`,
       [user_id || null, pod_id || null, pod_name, location || null,
        booking_date || null, time_label || null, people_count || 1]
     );
     res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/bookings/booked-pods?date=YYYY-MM-DD&time_label=X
+app.get("/api/bookings/booked-pods", async (req, res) => {
+  const { date, time_label } = req.query;
+  if (!date || !time_label) return res.status(400).json({ error: "date and time_label required" });
+  try {
+    const result = await pool.query(
+      `SELECT pod_name FROM bookings
+       WHERE booking_date = $1 AND time_label = $2 AND status = 'active'`,
+      [date, time_label]
+    );
+    res.json(result.rows.map(r => r.pod_name));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -14,54 +14,137 @@ import { API_URL } from "../api/apiClient";
 
 const screenWidth = Dimensions.get("window").width;
 
-const knockers = [
-  { id: "k1", name: "Alex" },
-  { id: "k2", name: "Ben" },
-  { id: "k3", name: "Chris" },
-];
+type Knock = { id: string; name: string };
+type BirthdayUser = { id: string; username: string; full_name: string | null };
+type ReceivedCard = { id: string; from: string; initial: string; cardId: string; message: string };
+
+function isTodayBirthday(birthday: string | null | undefined): boolean {
+  if (!birthday) return false;
+  try {
+    // Split the "YYYY-MM-DD" string directly — avoids timezone shifts from new Date()
+    const datePart = birthday.split("T")[0];
+    const parts = datePart.split("-");
+    if (parts.length < 3) return false;
+    const bdMonth = parseInt(parts[1], 10) - 1;
+    const bdDay = parseInt(parts[2], 10);
+    const today = new Date();
+    return bdMonth === today.getMonth() && bdDay === today.getDate();
+  } catch {
+    return false;
+  }
+}
 
 export default function HomePage({ navigation }: any) {
   const { user } = useUser();
   const carouselRef = useRef(null);
   const [colleagues, setColleagues] = useState<{ id: string; name: string; mode: string }[]>([]);
   const [signCardVisible, setSignCardVisible] = useState(false);
+  const [sendMessageVisible, setSendMessageVisible] = useState(false);
+  const [myBirthdayVisible, setMyBirthdayVisible] = useState(false);
+  const isMyBirthday = isTodayBirthday(user?.birthday);
+  const [knockedIds, setKnockedIds] = useState<Set<string>>(new Set());
+  const knockTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [incomingKnocks, setIncomingKnocks] = useState<Knock[]>([]);
+  const [todayBirthdays, setTodayBirthdays] = useState<BirthdayUser[]>([]);
+  const [receivedCards, setReceivedCards] = useState<ReceivedCard[]>([]);
+  const [selectedBirthdayPerson, setSelectedBirthdayPerson] = useState<BirthdayUser | null>(null);
 
-  useEffect(() => {
+  const fetchColleagues = () => {
     fetch(`${API_URL}/api/users`)
       .then((r) => r.json())
-      .then((data: { id: number; username: string; full_name: string | null; preferred_modes: string | null }[]) => {
+      .then((data: { id: string; username: string; full_name: string | null; preferred_modes: string | null }[]) => {
         const others = data
           .filter((u) => u.id !== user?.id)
           .map((u) => ({
             id: String(u.id),
             name: u.full_name || u.username,
-            mode: u.preferred_modes || "Available",
+            mode: u.preferred_modes || "Meeting",
           }));
         setColleagues(others);
       })
       .catch(() => {});
+  };
+
+  const fetchBirthdays = () => {
+    if (!user?.id) return;
+    fetch(`${API_URL}/api/birthdays/today?exclude_user_id=${user.id}`)
+      .then((r) => r.json())
+      .then((data: BirthdayUser[]) => setTodayBirthdays(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  };
+
+  const fetchReceivedCards = () => {
+    if (!user?.id) return;
+    fetch(`${API_URL}/api/birthday-cards?to_user_id=${user.id}`)
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        setReceivedCards(
+          data.map((c) => ({
+            id: String(c.id),
+            from: c.from_full_name || c.from_username,
+            initial: (c.from_full_name || c.from_username).charAt(0).toUpperCase(),
+            cardId: c.card_design || "1",
+            message: c.message,
+          }))
+        );
+      })
+      .catch(() => {});
+  };
+
+  const fetchKnocks = () => {
+    if (!user?.id) return;
+    fetch(`${API_URL}/api/knocks?to_user_id=${user.id}`)
+      .then((r) => r.json())
+      .then((data: any[]) => {
+        setIncomingKnocks(
+          data.map((k) => ({
+            id: String(k.id),
+            name: k.from_full_name || k.from_username,
+          }))
+        );
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchColleagues();
+    fetchKnocks();
+    fetchBirthdays();
+    fetchReceivedCards();
+    const colleagueInterval = setInterval(fetchColleagues, 10000);
+    const knockInterval = setInterval(fetchKnocks, 5000);
+    const birthdayInterval = setInterval(fetchBirthdays, 30000);
+    return () => {
+      clearInterval(colleagueInterval);
+      clearInterval(knockInterval);
+      clearInterval(birthdayInterval);
+    };
   }, [user?.id]);
-  const [sendMessageVisible, setSendMessageVisible] = useState(false);
-  const [myBirthdayVisible, setMyBirthdayVisible] = useState(false);
-  const [knockedIds, setKnockedIds] = useState<Set<string>>(new Set());
-  const knockTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const [dismissedKnockers, setDismissedKnockers] = useState<Set<string>>(new Set());
 
-  const handleReply = (knockerId: string) =>
-    setDismissedKnockers((prev) => new Set(prev).add(knockerId));
+  const handleDismissKnock = async (knockId: string) => {
+    setIncomingKnocks((prev) => prev.filter((k) => k.id !== knockId));
+    try {
+      await fetch(`${API_URL}/api/knocks/${knockId}/dismiss`, { method: "PUT" });
+    } catch {}
+  };
 
-  const activeKnockers = knockers.filter((k) => !dismissedKnockers.has(k.id));
-
-  const handleKnock = (id: string) => {
-    if (knockedIds.has(id)) return;
-    setKnockedIds((prev) => new Set(prev).add(id));
-    knockTimers.current[id] = setTimeout(() => {
+  const handleKnock = async (colleagueId: string) => {
+    if (knockedIds.has(colleagueId)) return;
+    setKnockedIds((prev) => new Set(prev).add(colleagueId));
+    knockTimers.current[colleagueId] = setTimeout(() => {
       setKnockedIds((prev) => {
         const next = new Set(prev);
-        next.delete(id);
+        next.delete(colleagueId);
         return next;
       });
     }, 2000);
+    try {
+      await fetch(`${API_URL}/api/knocks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from_user_id: user?.id, to_user_id: colleagueId }),
+      });
+    } catch {}
   };
 
   const renderItem = ({ item }: any) => (
@@ -99,96 +182,101 @@ export default function HomePage({ navigation }: any) {
         contentContainerStyle={styles.bdCardsContainer}
         style={styles.bdCardsScroll}
       >
-        {/* My Birthday Card */}
-        <View style={styles.myBirthdayCard}>
-          <View style={styles.myBdDecorTL} />
-          <View style={styles.myBdDecorBR} />
+        {/* My Birthday Card — show on user's birthday */}
+        {isMyBirthday && (
+          <View style={styles.myBirthdayCard}>
+            <View style={styles.myBdDecorTL} />
+            <View style={styles.myBdDecorBR} />
 
-          <View style={styles.myBdTop}>
-            <Text style={styles.myBdEmoji}>🎂</Text>
-            <View style={styles.myBdBadge}>
-              <Text style={styles.myBdBadgeText}>Your Birthday</Text>
-            </View>
-          </View>
-
-          <Text style={styles.myBdTitle}>Happy Birthday,{"\n"}{user?.full_name || user?.username}! 🥳</Text>
-          <Text style={styles.myBdSub}>3 colleagues signed your card today</Text>
-
-          <View style={styles.myBdAvatarRow}>
-            {["J", "A", "S"].map((initial, i) => (
-              <View
-                key={i}
-                style={[styles.myBdAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 3 - i }]}
-              >
-                <Text style={styles.myBdAvatarText}>{initial}</Text>
+            <View style={styles.myBdTop}>
+              <Text style={styles.myBdEmoji}>🎂</Text>
+              <View style={styles.myBdBadge}>
+                <Text style={styles.myBdBadgeText}>Your Birthday</Text>
               </View>
-            ))}
-            <Text style={styles.myBdAvatarLabel}>Jane, Anna & Simin</Text>
-          </View>
-
-          <Pressable style={styles.myBdButton} onPress={() => setMyBirthdayVisible(true)}>
-            <Text style={styles.myBdButtonText}>View Your Cards  🎁</Text>
-          </Pressable>
-        </View>
-
-        {/* Andrew's Birthday Card */}
-        <View style={styles.birthdayCard}>
-          <View style={styles.bdDecorTL} />
-          <View style={styles.bdDecorBR} />
-
-          <View style={styles.birthdayTop}>
-            <Text style={styles.birthdayEmoji}>🎉</Text>
-            <View style={styles.birthdayBadge}>
-              <Text style={styles.birthdayBadgeText}>Colleague's Birthday</Text>
             </View>
-          </View>
 
-          <Text style={styles.birthdayText}>{"Today is\nAndrew's Birthday!"}</Text>
-          <Text style={styles.birthdaySub}>Show him some love from the team 💙</Text>
-
-          <View style={styles.birthdayActions}>
-            <Pressable style={styles.birthdayButton} onPress={() => setSignCardVisible(true)}>
-              <Text style={styles.birthdayButtonText}>✍️  Sign Card</Text>
-            </Pressable>
-            <Pressable style={[styles.birthdayButton, styles.birthdayButtonOutline]} onPress={() => setSendMessageVisible(true)}>
-              <Text style={styles.birthdayButtonTextOutline}>✉️  Message</Text>
-            </Pressable>
+            <Text style={styles.myBdTitle}>Happy Birthday,{"\n"}{user?.full_name || user?.username}! 🥳</Text>
+            {receivedCards.length > 0 ? (
+              <>
+                <Text style={styles.myBdSub}>{receivedCards.length} colleague{receivedCards.length > 1 ? "s" : ""} signed your card today</Text>
+                <View style={styles.myBdAvatarRow}>
+                  {receivedCards.slice(0, 3).map((c, i) => (
+                    <View key={c.id} style={[styles.myBdAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 3 - i }]}>
+                      <Text style={styles.myBdAvatarText}>{c.initial}</Text>
+                    </View>
+                  ))}
+                  <Text style={styles.myBdAvatarLabel}>
+                    {receivedCards.slice(0, 3).map((c) => c.from).join(", ")}
+                  </Text>
+                </View>
+                <Pressable style={styles.myBdButton} onPress={() => setMyBirthdayVisible(true)}>
+                  <Text style={styles.myBdButtonText}>View Your Cards  🎁</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Text style={styles.myBdSub}>No cards yet — your colleagues can sign one for you!</Text>
+            )}
           </View>
-        </View>
+        )}
+
+        {/* Colleague Birthday Cards — one per person with birthday today */}
+        {todayBirthdays.map((person) => {
+          const name = person.full_name || person.username;
+          return (
+            <View key={person.id} style={styles.birthdayCard}>
+              <View style={styles.bdDecorTL} />
+              <View style={styles.bdDecorBR} />
+
+              <View style={styles.birthdayTop}>
+                <Text style={styles.birthdayEmoji}>🎉</Text>
+                <View style={styles.birthdayBadge}>
+                  <Text style={styles.birthdayBadgeText}>Colleague's Birthday</Text>
+                </View>
+              </View>
+
+              <Text style={styles.birthdayText}>{`Today is\n${name}'s Birthday!`}</Text>
+              <Text style={styles.birthdaySub}>Show them some love from the team 💙</Text>
+
+              <View style={styles.birthdayActions}>
+                <Pressable style={styles.birthdayButton} onPress={() => { setSelectedBirthdayPerson(person); setSignCardVisible(true); }}>
+                  <Text style={styles.birthdayButtonText}>✍️  Sign Card</Text>
+                </Pressable>
+                <Pressable style={[styles.birthdayButton, styles.birthdayButtonOutline]} onPress={() => { setSelectedBirthdayPerson(person); setSendMessageVisible(true); }}>
+                  <Text style={styles.birthdayButtonTextOutline}>✉️  Message</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
       </ScrollView>
 
       <SignCardModal
         visible={signCardVisible}
         onClose={() => setSignCardVisible(false)}
-        recipientName="Andrew"
+        recipientName={selectedBirthdayPerson ? (selectedBirthdayPerson.full_name || selectedBirthdayPerson.username) : ""}
+        fromUserId={user?.id}
+        toUserId={selectedBirthdayPerson?.id}
       />
       <SendMessageModal
         visible={sendMessageVisible}
         onClose={() => setSendMessageVisible(false)}
-        recipientName="Andrew"
+        recipientName={selectedBirthdayPerson ? (selectedBirthdayPerson.full_name || selectedBirthdayPerson.username) : ""}
       />
       <ReceivedCardsModal
         visible={myBirthdayVisible}
         onClose={() => setMyBirthdayVisible(false)}
+        cards={receivedCards}
       />
 
       {/* Knock Section - horizontally scrollable cards */}
-      {activeKnockers.length === 0 && dismissedKnockers.size > 0 && (
-        <Pressable
-          style={styles.resetKnockBtn}
-          onPress={() => setDismissedKnockers(new Set())}
-        >
-          <Text style={styles.resetKnockText}>↺  Show knocks again</Text>
-        </Pressable>
-      )}
-      {activeKnockers.length > 0 && (
+      {incomingKnocks.length > 0 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.knockCardsContainer}
           style={styles.knockCardsScroll}
         >
-          {activeKnockers.map((knocker) => (
+          {incomingKnocks.map((knocker) => (
             <View key={knocker.id} style={styles.knockCard}>
               <View style={styles.knockHeader}>
                 <Image source={require("../images/avatar.png")} style={styles.knockAvatar} />
@@ -207,7 +295,7 @@ export default function HomePage({ navigation }: any) {
                   <Pressable
                     key={emoji}
                     style={[styles.emojiTile, { backgroundColor: bg }]}
-                    onPress={() => handleReply(knocker.id)}
+                    onPress={() => handleDismissKnock(knocker.id)}
                   >
                     <Text style={styles.emojiTileText}>{emoji}</Text>
                   </Pressable>
@@ -219,7 +307,7 @@ export default function HomePage({ navigation }: any) {
                   <Pressable
                     key={label}
                     style={styles.replyButton}
-                    onPress={() => handleReply(knocker.id)}
+                    onPress={() => handleDismissKnock(knocker.id)}
                   >
                     <Text style={styles.replyButtonText}>{label}</Text>
                   </Pressable>

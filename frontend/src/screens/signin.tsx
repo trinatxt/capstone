@@ -11,7 +11,8 @@ export default function SignIn({ navigation }: any) {
       />
 
       <Text style={styles.title}>
-        Secure access to your IoT-enabled{"\n"}Smart Meeting Pods
+        A New Typology of {"\n"}Compactable Meeting Pods
+        
       </Text>
 
       <Pressable
@@ -43,7 +44,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#F9F9F9", // optional light background
+    backgroundColor: "#FFFFFF", // optional light background
   },
   logo: {
     width: 180,

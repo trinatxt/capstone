@@ -7,7 +7,7 @@ export default function GetStarted({ navigation }: any) {
     <View style={styles.container}>
       {/* Logo */}
       <Image
-        source={require("../images/pod.png")}
+        source={require("../images/bobpod.png")}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#F9F9F9", // optional light background
+    backgroundColor: "#FFFFFF", // optional light background
   },
   logo: {
     width: 180,

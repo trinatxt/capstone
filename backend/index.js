@@ -600,7 +600,7 @@ app.post("/api/pods/:id/knock", async (req, res) => {
 // Send command payload directly to a pod
 app.post("/api/pods/:id/sync-command", async (req, res) => {
   const targetPodId = req.params.id;
-  const { fan_speed, brightness, theme_id, unlock } = req.body;
+  const { fan_speed, brightness, theme_id, unlock, wifi_ssid, wifi_password } = req.body;
 
   try {
     const podCheck = await pool.query(
@@ -624,6 +624,8 @@ app.post("/api/pods/:id/sync-command", async (req, res) => {
     if (brightness !== undefined) payload.brightness = Number(brightness);
     if (theme_id !== undefined) payload.theme_id = theme_id;
     if (unlock !== undefined) payload.unlock = Boolean(unlock);
+    if (wifi_ssid !== undefined) payload.wifi_ssid = String(wifi_ssid);
+    if (wifi_password !== undefined) payload.wifi_password = String(wifi_password);
 
     await publishToIoT(topic, payload, 0);
 

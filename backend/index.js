@@ -764,6 +764,16 @@ app.post("/api/knocks", async (req, res) => {
        VALUES ($1, $2) RETURNING *`,
       [from_user_id, to_user_id]
     );
+
+    // Always trigger the physical pod knock LED (single prototype pod)
+    await publishToIoT("pods/delta-pod-1/knock", {
+      type: "knock",
+      from_pod: "app",
+      from_user: from_user_id,
+      pattern: "pulse",
+      duration_ms: 2000,
+    }).catch((err) => console.warn("MQTT knock publish warn:", err.message));
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });

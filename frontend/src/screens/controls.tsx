@@ -91,7 +91,7 @@ export default function Controls({ navigation }: any) {
         {/* Pod image + Active Session panel */}
         <View style={styles.sessionRow}>
           <Image
-            source={require("../images/pod.png")}
+            source={require("../images/bobpod.png")}
             style={styles.podImage}
             resizeMode="contain"
           />

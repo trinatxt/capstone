@@ -11,8 +11,8 @@
 // =====================================================
 
 // ========== WIFI CONFIG ==========
-const char* ssid     = "jjjddd";
-const char* password = "abc12345";
+const char* ssid     = "WIFI_USERNAME";
+const char* password = "WIFI_PASSWORD";
 #define SERVICE_NAME "SmartPod-Provision"
 #define POP "abcd1234"
 

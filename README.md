@@ -30,7 +30,7 @@ Install the following on your development machine before starting:
 ### 1. Clone the repository
 
 ```sh
-git clone <repo-url>
+git clone https://github.com/trinatxt/capstone.git
 cd capstone
 ```
 
@@ -40,6 +40,17 @@ cd capstone
 cd backend
 npm install
 ```
+
+This installs the following packages (declared in `backend/package.json`):
+
+| Package | Purpose |
+|---|---|
+| `express` | REST API server framework |
+| `pg` | PostgreSQL client |
+| `bcrypt` | Password hashing for user authentication |
+| `cors` | CORS middleware so the mobile app can call the backend |
+| `dotenv` | Loads `.env` environment variables |
+| `@aws-sdk/client-iot-data-plane` | Publishes MQTT messages to AWS IoT Core |
 
 Create a `.env` file inside the `backend/` folder with the following environment variables (ask the project owner for the actual values):
 
@@ -105,6 +116,25 @@ cd frontend
 npm install
 ```
 
+This installs all packages declared in `frontend/package.json`, including:
+
+| Package | Purpose |
+|---|---|
+| `react-native` | Core React Native framework |
+| `@react-navigation/native`, `bottom-tabs`, `native-stack` | Screen navigation (tabs and stacks) |
+| `@react-native-community/datetimepicker` | Date picker used in MakeBooking |
+| `@react-native-community/slider`, `react-native-slider` | Brightness / fan speed sliders |
+| `react-native-vector-icons` | Icon library (Ionicons) used across the UI |
+| `react-native-svg`, `react-native-chart-kit` | Chart rendering on the Dashboard |
+| `react-native-snap-carousel` | Horizontal carousels (e.g. office home bookings) |
+| `react-native-safe-area-context`, `react-native-screens` | Native support for navigation |
+
+Link vector icon fonts for Android (one-time, only if icons appear as "?" boxes):
+
+```sh
+cd android && ./gradlew clean && cd ..
+```
+
 Start Metro (the JavaScript bundler):
 
 ```sh
@@ -122,9 +152,9 @@ The app should build and launch on your device/emulator.
 
 ---
 
-## ESP32 Firmware (Optional)
+## ESP32 Firmware 
 
-Required only if you are setting up a physical pod unit.
+Required when setting up a physical pod unit.
 
 1. Open `withble_wifi_fixed.ino` in the Arduino IDE
 2. Install the required libraries via Library Manager:

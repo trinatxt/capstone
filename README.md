@@ -8,7 +8,7 @@ A smart IoT office pod management system built with React Native (Android), Node
 capstone/
   frontend/                React Native mobile app
   backend/                 Node.js/Express REST API
-  withble_wifi_fixed.ino   ESP32-S3 firmware
+  esp32code/esp32code.ino  ESP32-S3 firmware
 ```
 
 ---
@@ -156,11 +156,16 @@ The app should build and launch on your device/emulator.
 
 Required when setting up a physical pod unit.
 
-1. Open `withble_wifi_fixed.ino` in the Arduino IDE
-2. Install the required libraries via Library Manager:
+1. Open `esp32code/esp32code.ino` in the Arduino IDE
+2. Install the required libraries via Arduino Library Manager:
    - `Adafruit NeoPixel`
    - `PubSubClient`
    - `ArduinoJson`
+
+   The firmware also uses these libraries bundled with the ESP32 Arduino Core (installed automatically when you add ESP32 board support in the Arduino IDE):
+   - `WiFi`
+   - `WiFiClientSecure`
+   - `WiFiProv`
 3. At the top of the file, set your Wi-Fi credentials:
    ```cpp
    const char* ssid     = "YOUR_HOTSPOT_NAME";
@@ -202,7 +207,7 @@ The ESP32 runs independently once flashed.
 - Clean and rebuild: `cd frontend/android && ./gradlew clean`, then `npm run android` from `frontend/`
 
 ### ESP32 "WiFi disconnected" loop
-- The hardcoded SSID and password in `withble_wifi_fixed.ino` don't match an active network
+- The hardcoded SSID and password in `esp32code.ino` don't match an active network
 - Update credentials and re-flash, or send new credentials via the Wi-Fi settings page in the app
 
 ### Pod not responding to control commands
@@ -229,4 +234,7 @@ backend/
   index.js         Express app + all routes + DB init
   .env             Environment variables (not committed)
   package.json
+
+esp32code/
+  esp32code.ino    ESP32-S3 firmware (flash via Arduino IDE)
 ```
